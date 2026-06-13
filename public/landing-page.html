@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corkbored — Pin your project. Build a real team.</title>
+<meta name="description" content="Where developers pin real side projects and recruit collaborators by application, not drive-by PRs. When a project wins, the people who built it share the upside.">
+<meta property="og:title" content="Corkbored — Pin your project. Build a real team.">
+<meta property="og:description" content="Collaborators by application, not drive-by PRs. Builders share the spoils.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board:#3f2f26; --board-deep:#30231d;
+    --paper:#f7efe1; --paper-edge:#e8dcc6; --paper-bright:#fffdf8;
+    --ink:#2b2118; --ink-soft:#6b5b4d;
+    --pin-red:#d9442b; --pin-teal:#1f8a70; --pin-gold:#d9a32b;
+    --tape:rgba(255,244,214,.55);
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --display:'Bricolage Grotesque',var(--sans);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans);color:var(--paper);background:var(--board);line-height:1.6;
+    background-image:
+      radial-gradient(1200px 600px at 70% -10%, rgba(255,235,200,.07), transparent 60%),
+      radial-gradient(900px 900px at 0% 100%, rgba(0,0,0,.25), transparent 55%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection{background:var(--pin-gold);color:var(--ink)}
+  a{color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  :focus-visible{outline:2.5px solid var(--pin-gold);outline-offset:3px;border-radius:4px}
+
+  /* ============ header ============ */
+  header{padding:26px 0}
+  header .wrap{display:flex;justify-content:space-between;align-items:center}
+  .logo{font-family:var(--display);font-weight:800;font-size:1.35rem;letter-spacing:-.02em;text-decoration:none;display:flex;align-items:center;gap:.45em}
+  .logo .pin{width:.62em;height:.62em;border-radius:50%;background:radial-gradient(circle at 35% 30%, #ff8a72, var(--pin-red) 60%, #8c2716);box-shadow:0 2px 3px rgba(0,0,0,.45)}
+  header nav{display:flex;gap:4px}
+  header nav a{font-family:var(--mono);font-size:.82rem;text-decoration:none;opacity:.75;padding:8px 12px;border-radius:6px}
+  header nav a:hover{opacity:1;background:rgba(247,239,225,.08)}
+
+  /* ============ hero ============ */
+  .hero{padding:54px 0 30px}
+  .hero .wrap{display:grid;grid-template-columns:1fr 1fr;gap:54px;align-items:center}
+  .kicker{font-family:var(--mono);font-size:.76rem;letter-spacing:.14em;text-transform:uppercase;color:var(--pin-gold);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .kicker::before{content:"";width:26px;height:1px;background:var(--pin-gold)}
+  h1{font-family:var(--display);font-weight:800;font-size:clamp(2.5rem,5.4vw,3.9rem);line-height:1.02;letter-spacing:-.028em;margin-bottom:22px}
+  h1 .mark{
+    display:inline-block;white-space:nowrap;
+    color:var(--ink);
+    background:linear-gradient(100deg, rgba(255,243,210,.96), rgba(248,233,196,.9));
+    padding:.03em .24em .07em;margin:.06em 0;
+    transform:rotate(-1.6deg);
+    box-shadow:0 4px 12px rgba(0,0,0,.35), inset 0 0 18px rgba(190,160,110,.18);
+    /* torn tape ends */
+    clip-path:polygon(1.2% 0, 99% 3%, 100% 14%, 99% 32%, 100% 52%, 99.2% 74%, 100% 90%, 98.4% 100%, 1.6% 97%, 0 86%, 1% 62%, 0 38%, 1.1% 16%);
+  }
+  .hero p.lede{font-size:1.08rem;color:#e9dfcd;max-width:36ch;margin-bottom:30px}
+  .lede b{color:var(--paper);font-weight:600}
+  .cta-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .btn{font-family:var(--mono);font-weight:500;font-size:.95rem;text-decoration:none;border:none;cursor:pointer;border-radius:7px;padding:14px 24px;transition:transform .12s ease, box-shadow .12s ease;display:inline-block}
+  .btn-primary{background:var(--pin-red);color:#fff;box-shadow:0 3px 0 #9c2f1d, 0 8px 18px rgba(0,0,0,.3)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 5px 0 #9c2f1d, 0 12px 22px rgba(0,0,0,.35)}
+  .btn-primary:active{transform:translateY(1px);box-shadow:0 1px 0 #9c2f1d}
+  .btn-ghost{background:transparent;color:var(--paper);border:1px solid rgba(247,239,225,.32)}
+  .btn-ghost:hover{border-color:var(--paper);background:rgba(247,239,225,.06)}
+  .drag-hint{font-family:var(--mono);font-size:.68rem;color:rgba(247,239,225,.45);margin-top:18px;display:none}
+
+  /* ============ the board ============ */
+  .board{position:relative;min-height:460px;touch-action:pan-y}
+  .card{
+    position:absolute;background:linear-gradient(178deg, var(--paper-bright), var(--paper) 70%);
+    color:var(--ink);width:236px;padding:20px 17px 14px;border-radius:3px;
+    box-shadow:0 12px 24px rgba(0,0,0,.45), 0 2px 5px rgba(0,0,0,.3);
+    --r:0deg;transform:rotate(var(--r));
+  }
+  .card.grabbable{cursor:grab}
+  .card.dragging{cursor:grabbing;box-shadow:0 22px 40px rgba(0,0,0,.55);z-index:10}
+  .card::before{
+    content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+    width:17px;height:17px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, #ff8a72, var(--pin-red) 60%, #8c2716);
+    box-shadow:0 4px 5px rgba(0,0,0,.5);
+  }
+  .card.teal::before{background:radial-gradient(circle at 35% 30%, #6fd4b8, var(--pin-teal) 60%, #0e5a47)}
+  .card.gold::before{background:radial-gradient(circle at 35% 30%, #ffd97a, var(--pin-gold) 60%, #8a6312)}
+  .card .repo{font-family:var(--mono);font-size:.74rem;color:var(--ink-soft);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card h3{font-family:var(--display);font-weight:600;font-size:1.04rem;line-height:1.25;margin-bottom:9px}
+  .card .meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px}
+  .tag{font-family:var(--mono);font-size:.64rem;background:var(--paper-edge);border-radius:3px;padding:2px 7px;color:var(--ink-soft)}
+  .card .role{font-size:.8rem;border-top:1px dashed var(--paper-edge);padding-top:9px}
+  .card .role strong{color:var(--pin-red)}
+  .card.teal .role strong{color:var(--pin-teal)}
+  .card.gold .role strong{color:#a87c14}
+  .card.ghost{
+    background:none;border:2px dashed rgba(247,239,225,.35);color:rgba(247,239,225,.8);
+    box-shadow:none;text-align:center;padding:34px 17px;text-decoration:none;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .card.ghost::before{display:none}
+  .card.ghost:hover{border-color:var(--pin-gold);background:rgba(247,239,225,.05)}
+  .card.ghost .big{font-family:var(--display);font-weight:600;font-size:1.05rem;display:block;margin-bottom:6px}
+  .card.ghost .small{font-family:var(--mono);font-size:.7rem;color:rgba(247,239,225,.55)}
+  .c1{top:6px;left:2%;--r:-3deg}
+  .c2{top:108px;right:0;--r:2.2deg}
+  .c3{bottom:84px;left:14%;--r:1.5deg;z-index:2}
+  .c4{bottom:0;right:8%;--r:-1.6deg}
+
+  @keyframes pindrop{
+    0%{opacity:0;transform:translateY(-26px) rotate(var(--r)) scale(1.04)}
+    70%{opacity:1;transform:translateY(3px) rotate(var(--r))}
+    100%{opacity:1;transform:translateY(0) rotate(var(--r))}
+  }
+  .pinning .card{animation:pindrop .5s cubic-bezier(.2,.8,.3,1.1) both}
+  .pinning .c1{animation-delay:.05s}.pinning .c2{animation-delay:.18s}
+  .pinning .c3{animation-delay:.32s}.pinning .c4{animation-delay:.48s}
+
+  /* ============ section scaffolding ============ */
+  section h2{font-family:var(--display);font-weight:800;font-size:clamp(1.7rem,3.4vw,2.4rem);letter-spacing:-.022em;line-height:1.12;margin-bottom:14px}
+  .section-kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--pin-gold);margin-bottom:14px}
+
+  /* ============ problems ============ */
+  .strip{background:var(--board-deep);padding:72px 0;margin-top:56px;border-top:1px solid rgba(247,239,225,.07);border-bottom:1px solid rgba(247,239,225,.07)}
+  .strip .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:38px;margin-top:38px}
+  .strip h3{font-family:var(--mono);font-size:.92rem;color:var(--pin-gold);margin-bottom:10px}
+  .strip p{color:#d8cdbb;font-size:.95rem;max-width:38ch}
+
+  /* ============ how it works ============ */
+  .how{padding:78px 0 10px}
+  .how ol{list-style:none;counter-reset:step;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:36px}
+  .how li{counter-increment:step;background:rgba(247,239,225,.05);border:1px solid rgba(247,239,225,.13);border-radius:10px;padding:22px 19px;position:relative}
+  .how li::before{content:counter(step,decimal-leading-zero);font-family:var(--mono);color:var(--pin-red);font-size:.78rem;display:block;margin-bottom:12px}
+  .how h3{font-family:var(--display);font-weight:600;font-size:1.06rem;margin-bottom:7px}
+  .how p{font-size:.88rem;color:#d8cdbb}
+
+  /* ============ workspace ============ */
+  .workspace{padding:78px 0 30px}
+  .workspace .wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:50px;align-items:center}
+  .workspace p.body{color:#d8cdbb;font-size:.97rem;max-width:42ch;margin-bottom:14px}
+  .ws-panel{
+    background:var(--paper);color:var(--ink);border-radius:5px;padding:20px;
+    box-shadow:0 16px 34px rgba(0,0,0,.45);transform:rotate(.6deg);
+  }
+  .ws-tabs{display:flex;gap:2px;border-bottom:1.5px solid var(--paper-edge);margin-bottom:14px;font-family:var(--mono);font-size:.66rem;flex-wrap:wrap}
+  .ws-tabs span{padding:7px 10px;color:var(--ink-soft)}
+  .ws-tabs .on{color:var(--ink);border-bottom:2px solid var(--pin-red);font-weight:500}
+  .kan{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .kan .col{background:var(--paper-edge);border-radius:7px;padding:9px}
+  .kan h4{font-family:var(--mono);font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);margin-bottom:8px}
+  .kan .note{background:var(--paper-bright);border:1px solid #ddcfb5;border-radius:5px;padding:7px 9px;font-size:.7rem;line-height:1.4;margin-bottom:7px;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+  .kan .note .who{font-family:var(--mono);font-size:.58rem;color:var(--ink-soft);display:block;margin-top:3px}
+  .kan .note.done{opacity:.62;text-decoration:line-through}
+  .kan .note.done .who{text-decoration:none}
+  .ws-caption{font-family:var(--mono);font-size:.66rem;color:var(--ink-soft);margin-top:12px;border-top:1px dashed var(--paper-edge);padding-top:10px}
+
+  /* ============ rules note ============ */
+  .rules{padding:70px 0 10px}
+  .rules .note{
+    background:var(--paper);color:var(--ink);max-width:580px;margin:34px auto 0;
+    padding:30px 32px;border-radius:2px;transform:rotate(-.9deg);
+    box-shadow:0 14px 30px rgba(0,0,0,.45);position:relative;
+  }
+  .rules .note::before,.rules .note::after{ /* washi tape corners */
+    content:"";position:absolute;width:86px;height:26px;background:var(--tape);
+    backdrop-filter:blur(1px);box-shadow:0 1px 3px rgba(0,0,0,.15);
+  }
+  .rules .note::before{top:-12px;left:-26px;transform:rotate(-38deg)}
+  .rules .note::after{top:-12px;right:-26px;transform:rotate(38deg)}
+  .rules .note h3{font-family:var(--mono);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:16px;text-align:center}
+  .rules .note ul{list-style:none}
+  .rules .note li{font-family:var(--mono);font-size:.94rem;padding:11px 0;border-bottom:1px dashed var(--paper-edge)}
+  .rules .note li:last-child{border-bottom:none}
+  .rules .note li::before{content:"→ ";color:var(--pin-red)}
+
+  /* ============ waitlist ============ */
+  .waitlist{padding:60px 0 100px;text-align:center}
+  .signup-card{
+    background:linear-gradient(178deg,var(--paper-bright),var(--paper) 75%);color:var(--ink);
+    max-width:470px;margin:36px auto 0;padding:32px 30px 26px;border-radius:3px;
+    transform:rotate(1deg);box-shadow:0 16px 34px rgba(0,0,0,.5);position:relative;text-align:left;
+  }
+  .signup-card::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:17px;height:17px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #ffd97a, var(--pin-gold) 60%, #8a6312);box-shadow:0 4px 5px rgba(0,0,0,.5)}
+  .signup-card h3{font-family:var(--display);font-weight:600;font-size:1.22rem;margin-bottom:6px}
+  .signup-card p{font-size:.88rem;color:var(--ink-soft);margin-bottom:18px}
+  .signup-card form{display:flex;gap:10px;flex-wrap:wrap}
+  .signup-card input[type=email]{
+    flex:1;min-width:200px;font-family:var(--mono);font-size:.92rem;
+    padding:13px 14px;border:1.5px solid var(--paper-edge);border-radius:7px;
+    background:#fff;color:var(--ink);
+  }
+  .signup-card input[type=email]:focus{outline:2px solid var(--pin-gold);outline-offset:1px;border-color:transparent}
+  .hp{position:absolute;left:-9999px;opacity:0;height:0;width:0}
+  .form-msg{font-family:var(--mono);font-size:.78rem;margin-top:12px;display:none}
+  .form-msg.ok{display:block;color:var(--pin-teal)}
+  .form-msg.err{display:block;color:var(--pin-red)}
+  .signup-card .fine{font-size:.72rem;color:var(--ink-soft);margin-top:12px;margin-bottom:0}
+
+  footer{border-top:1px solid rgba(247,239,225,.12);padding:28px 0;font-family:var(--mono);font-size:.76rem;color:#bfb29c}
+  footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+  /* ============ responsive ============ */
+  @media (min-width:881px) and (pointer:fine){ .drag-hint{display:block} }
+  @media (max-width:880px){
+    .hero .wrap{grid-template-columns:1fr;gap:44px}
+    .board{min-height:520px;max-width:540px;margin:0 auto;width:100%}
+    .strip .grid{grid-template-columns:1fr}
+    .how ol{grid-template-columns:1fr 1fr}
+    .workspace .wrap{grid-template-columns:1fr}
+  }
+  @media (max-width:560px){
+    .how ol{grid-template-columns:1fr}
+    .card{width:204px}
+    .c2{right:-2%} .c4{right:0}
+    .rules .note::before,.rules .note::after{width:64px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important;animation:none !important}
+    html{scroll-behavior:auto}
+    .pinning .card{opacity:1;transform:rotate(var(--r))}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="logo" href="/"><span class="pin" aria-hidden="true"></span>corkbored</a>
+    <nav aria-label="Main">
+      <a href="#how">how it works</a>
+      <a href="#workspace">the workspace</a>
+      <a href="#rules">house rules</a>
+      <a href="#waitlist">join</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div>
+        <p class="kicker">For developers done shipping alone</p>
+        <h1>Stop developing alone.<br><span class="mark">Pin your project.</span><br>Build a real team.</h1>
+        <p class="lede">Side projects die solo. Corkbored is where you find the people who actually build with you — your team, maybe your cofounders — and where everyone who ships shares in what it becomes.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#waitlist">Join the waitlist</a>
+          <a class="btn btn-ghost" href="#how">How it works</a>
+        </div>
+        <p class="drag-hint">psst — the cards move. it's a corkboard.</p>
+      </div>
+
+      <div class="board pinning" id="board" aria-label="Example pinned projects">
+        <article class="card c1" data-drag>
+          <p class="repo">github.com/mira/ledgerline</p>
+          <h3>Open-source budgeting for freelancers</h3>
+          <div class="meta"><span class="tag">TypeScript</span><span class="tag">Postgres</span><span class="tag">launched</span></div>
+          <p class="role"><strong>Needs:</strong> mobile dev · ~5 hrs/wk</p>
+        </article>
+        <article class="card c2 teal" data-drag>
+          <p class="repo">github.com/dev-sara/trailcache</p>
+          <h3>Offline maps for backcountry hikers</h3>
+          <div class="meta"><span class="tag">Rust</span><span class="tag">React Native</span><span class="tag">building</span></div>
+          <p class="role"><strong>Needs:</strong> Rust dev · backend</p>
+        </article>
+        <article class="card c3 gold" data-drag>
+          <p class="repo">github.com/jq-dev/promptpit</p>
+          <h3>Self-hosted eval harness for LLM apps</h3>
+          <div class="meta"><span class="tag">Python</span><span class="tag">prototype</span></div>
+          <p class="role"><strong>Needs:</strong> frontend · design eng</p>
+        </article>
+        <a class="card ghost c4" href="#waitlist">
+          <span class="big">Your repo here</span>
+          <span class="small">real commits required — no ideas guys</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip">
+    <div class="wrap">
+      <p class="section-kicker">For builders between things</p>
+      <h2>Find your team. Ship your thing.</h2>
+      <div class="grid">
+        <div>
+          <h3>// the team feeling, again</h3>
+          <p>Too many million-dollar ideas sit abandoned because one person ran out of steam. Find builders who actually want to be there — people who chose your project, not just anyone with a GitHub account.</p>
+        </div>
+        <div>
+          <h3>// the builders pledge</h3>
+          <p>Everyone who joins agrees to treat each other with honesty and integrity. No ego, no politics, no spam PRs — just builders working together on something they believe in.</p>
+        </div>
+        <div>
+          <h3>// share what you make</h3>
+          <p>If it takes off, everyone who built it is already on the record — code, tasks, decisions, all of it. The spoils go to the people who earned them.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <div class="wrap">
+      <p class="section-kicker">From repo to team</p>
+      <h2>How it works</h2>
+      <ol>
+        <li>
+          <h3>Pin a project</h3>
+          <p>Link a real GitHub repo with real commits. Verified automatically — no vaporware on the board.</p>
+        </li>
+        <li>
+          <h3>Say who you need</h3>
+          <p>Collaborators, not employees: "React dev, great with tailwind!" Set the expectation up front.</p>
+        </li>
+        <li>
+          <h3>Choose your team</h3>
+          <p>Devs apply with a short pitch and their actual GitHub history. You decide who gets in.</p>
+        </li>
+        <li>
+          <h3>Build &amp; share the upside</h3>
+          <p>Accepted members get repo access. If the project takes off, the contribution record is already there.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="workspace" id="workspace">
+    <div class="wrap">
+      <div>
+        <p class="section-kicker">After the match</p>
+        <h2>More than matchmaking — a place the team actually works.</h2>
+        <p class="body">Every project gets a shared workspace: a task board, async discussion threads, an announcements feed, and a live activity stream synced from GitHub.</p>
+        <p class="body">And here's the part that matters later: tasks finished, threads decided, commits merged — it all lands on the contribution record. Design and docs count, not just code. When the project wins, nobody argues about who built it.</p>
+      </div>
+      <div class="ws-panel" aria-label="Workspace preview">
+        <div class="ws-tabs"><span>Applications</span><span class="on">Tasks</span><span>Discussion</span><span>Announcements</span><span>Activity</span></div>
+        <div class="kan">
+          <div class="col"><h4>To do</h4>
+            <div class="note">Results dashboard wireframe<span class="who">unassigned</span></div>
+            <div class="note">Rubric scoring edge cases<span class="who">@jq-dev</span></div>
+          </div>
+          <div class="col"><h4>Doing</h4>
+            <div class="note">CSV export for eval runs<span class="who">@ana-builds</span></div>
+          </div>
+          <div class="col"><h4>Done</h4>
+            <div class="note done">SQLite migration<span class="who">@jq-dev</span></div>
+            <div class="note done">Diff view fix<span class="who">@jq-dev</span></div>
+          </div>
+        </div>
+        <p class="ws-caption">done + assigned = logged as a contribution</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="rules" id="rules">
+    <div class="wrap">
+      <h2 style="text-align:center">House rules</h2>
+      <div class="note">
+        <h3>Pinned to the board</h3>
+        <ul>
+          <li>No ideas guys. Code first, then collaborators.</li>
+          <li>No drive-by PRs. Apply, get accepted, contribute.</li>
+          <li>Builders share the spoils. Contribution is on the record.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="waitlist" id="waitlist">
+    <div class="wrap">
+      <h2>The board opens soon.</h2>
+      <div class="signup-card">
+        <h3>Pin yourself to the board</h3>
+        <p>Get early access at launch. Waitlist devs get first look.</p>
+        <form id="waitlist-form" novalidate>
+          <label for="email" style="position:absolute;left:-9999px">Email address</label>
+          <input id="email" type="email" name="email" placeholder="you@example.dev" required autocomplete="email">
+          <!-- honeypot: bots fill this, humans never see it -->
+          <input class="hp" type="text" name="nickname" tabindex="-1" autocomplete="off" aria-hidden="true">
+          <button class="btn btn-primary" type="submit" id="submit-btn">Join waitlist</button>
+        </form>
+        <p class="form-msg" id="form-msg" role="status"></p>
+        <p class="fine">No spam — that's kind of our whole thing.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 corkbored.com</span>
+    <span>built by a dev, for devs</span>
+  </div>
+</footer>
+
+<script>
+/* ================= WAITLIST FORM =================
+   Set FORM_ENDPOINT to your form backend URL.
+   Full setup instructions: see README.md next to this file.
+   Until you set it, submissions show a friendly error. */
+var FORM_ENDPOINT = "https://formspree.io/f/mzdqkawp"; // e.g. "https://formspree.io/f/YOUR_FORM_ID"
+
+(function(){
+  var form = document.getElementById('waitlist-form');
+  var msg = document.getElementById('form-msg');
+  var btn = document.getElementById('submit-btn');
+
+  function show(kind, text){ msg.className = 'form-msg ' + kind; msg.textContent = text; }
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    var email = form.email.value.trim();
+    if(form.nickname.value){ show('ok','Pinned. See you at launch.'); form.reset(); return; } // honeypot: pretend success
+    if(!email || email.indexOf('@') < 1){ show('err','That email doesn\'t look right.'); return; }
+    if(!FORM_ENDPOINT){ show('err','Signup isn\'t wired up yet — set FORM_ENDPOINT (see README).'); return; }
+
+    btn.disabled = true; btn.textContent = 'Pinning…';
+    fetch(FORM_ENDPOINT, {
+      method:'POST',
+      headers:{'Accept':'application/json','Content-Type':'application/json'},
+      body: JSON.stringify({ email: email })
+    }).then(function(res){
+      if(res.ok){ show('ok','Pinned. See you at launch.'); form.reset(); }
+      else{ show('err','Something went wrong — try again in a minute.'); }
+    }).catch(function(){
+      show('err','Network hiccup — try again in a minute.');
+    }).finally(function(){
+      btn.disabled = false; btn.textContent = 'Join waitlist';
+    });
+  });
+})();
+
+/* ================= DRAGGABLE PINNED CARDS =================
+   Desktop, fine-pointer only. Cards swing slightly while dragged,
+   like paper pivoting on its pin. Decorative — links/buttons unaffected. */
+(function(){
+  var finePointer = window.matchMedia('(pointer:fine)').matches;
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var board = document.getElementById('board');
+  if(!finePointer || !board) return;
+
+  // remove entrance animation class after it plays so transforms are ours
+  setTimeout(function(){ board.classList.remove('pinning'); }, reduced ? 0 : 1200);
+
+  var cards = board.querySelectorAll('[data-drag]');
+  cards.forEach(function(card){
+    card.classList.add('grabbable');
+    var ox=0, oy=0, baseRot = parseFloat((getComputedStyle(card).getPropertyValue('--r')||'0').replace('deg','')) || 0;
+    var dragging=false, startX=0, startY=0, lastX=0;
+
+    card.addEventListener('pointerdown', function(e){
+      if(e.button !== 0) return;
+      dragging = true; startX = e.clientX - ox; startY = e.clientY - oy; lastX = e.clientX;
+      card.classList.add('dragging');
+      card.setPointerCapture(e.pointerId);
+    });
+    card.addEventListener('pointermove', function(e){
+      if(!dragging) return;
+      ox = e.clientX - startX; oy = e.clientY - startY;
+      var swing = Math.max(-7, Math.min(7, (e.clientX - lastX) * 0.6));
+      lastX = e.clientX;
+      card.style.transform = 'translate(' + ox + 'px,' + oy + 'px) rotate(' + (baseRot + swing) + 'deg)';
+    });
+    function release(){
+      if(!dragging) return;
+      dragging = false;
+      card.classList.remove('dragging');
+      card.style.transform = 'translate(' + ox + 'px,' + oy + 'px) rotate(' + baseRot + 'deg)';
+    }
+    card.addEventListener('pointerup', release);
+    card.addEventListener('pointercancel', release);
+  });
+})();
+</script>
+</body>
+</html>

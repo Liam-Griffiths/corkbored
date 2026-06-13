@@ -1,38 +1,23 @@
 # Corkbored
 
-A stupid placeholder website where you can stick notes and images to a virtual corkboard. It's like Pinterest, but worse.
+A platform where developers pin real side projects and recruit collaborators by application — not drive-by PRs. When a project wins, the people who built it share the upside.
 
-## Features
+## Structure
 
-- 🗒️ Add sticky notes with text
-- 🖼️ Add images from URLs
-- 🎵 Play the Crash Bandicoot theme (because why not?)
-- 🖱️ Drag notes around like a digital hoarder
-- ✏️ Edit text directly on the notes
-- 📏 Resize notes to your heart's content
-- ❌ Delete notes when you're done with them
-- 💾 Everything saves automatically (even your mistakes)
+- `/` — static landing page (`public/landing-page.html`)
+- `/app` — Next.js application (app router)
 
-## How to Use
+## Development
 
-1. Double-click a note to edit its text
-2. Click and drag to move notes around
-3. Hover over notes to see resize and delete buttons
-4. Use the sidebar to add new notes or images
-5. Press the play button at the bottom to unleash the Crash Bandicoot theme
-6. Press Escape to stop editing a note
+```bash
+npm run dev
+```
 
-## Technical Stuff
+- Landing page: [http://localhost:3000](http://localhost:3000)
+- App: [http://localhost:3000/app](http://localhost:3000/app)
 
-- Built with Next.js and TypeScript
-- Uses Canvas for the corkboard
-- Stores everything in localStorage (because we're not fancy enough for a database)
-- Has a dark mode sidebar (because light mode is for nerds)
+## Stack
 
-## Why Does This Exist?
-
-¯\\_(ツ)_/¯
-
-## License
-
-MIT (Do whatever you want with this mess)
+- Next.js 16 (app router)
+- TypeScript
+- Tailwind CSS v4

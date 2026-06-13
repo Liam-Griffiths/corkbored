@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  basePath: "/app",
+  async rewrites() {
+    return [
+      { source: "/", destination: "/landing-page.html" },
+    ];
+  },
 };
 
 export default nextConfig;
