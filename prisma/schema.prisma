@@ -146,18 +146,20 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts            Account[]
-  sessions            Session[]
-  skills              UserSkill[]
-  githubStats         GithubStats?
-  ownedProjects       Project[]      @relation("ProjectOwner")
-  memberships         Membership[]
-  applications        Application[]
-  notifications       Notification[]
-  reports             Report[]
-  removedMemberships  Membership[]   @relation("RemovedBy")
-  moderationDecisions ModerationItem[]
-  assignedTasks       Task[]
+  accounts              Account[]
+  sessions              Session[]
+  skills                UserSkill[]
+  githubStats           GithubStats?
+  ownedProjects         Project[]        @relation("ProjectOwner")
+  memberships           Membership[]
+  applications          Application[]
+  notifications         Notification[]
+  reports               Report[]
+  removedMemberships    Membership[]     @relation("RemovedBy")
+  moderationDecisions   ModerationItem[]
+  assignedTasks         Task[]
+  authoredAnnouncements Announcement[]   @relation("AnnouncementAuthor")
+  contributions         ContributionEvent[]
 }
 
 model UserSkill {
@@ -278,6 +280,7 @@ model ContributionEvent {
   occurredAt DateTime         @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
 
   // Dedup: same external event can only be recorded once per project+kind combo
   // externalId=task.id for manual contributions, commit SHA / PR id for GitHub events
@@ -329,6 +332,7 @@ model Announcement {
   createdAt        DateTime         @default(now())
 
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author          User             @relation("AnnouncementAuthor", fields: [authorId], references: [id])
   moderationItems ModerationItem[]
   notifications   Notification[]
 

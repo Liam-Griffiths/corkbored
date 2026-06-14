@@ -1,0 +1,73 @@
+import { NextRequest } from "next/server";
+import { prisma } from "@/lib/db";
+import { requireUser, AuthError } from "@/lib/authz";
+import { CreateAnnouncementSchema } from "@/lib/validators";
+import { apiError } from "@/lib/api";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ slug: string }> },
+) {
+  try {
+    const { slug } = await params;
+    const user = await requireUser();
+
+    const project = await prisma.project.findUnique({
+      where: { slug },
+      include: {
+        memberships: { where: { userId: user.id, leftAt: null } },
+      },
+    });
+    if (!project) return Response.json({ error: "Not found" }, { status: 404 });
+
+    const myMembership = project.memberships[0];
+    if (!myMembership || !["owner", "maintainer"].includes(myMembership.role as string)) {
+      throw new AuthError(403, "Only owner or maintainer can post announcements");
+    }
+
+    // Rate limit: 3 announcements per project per day
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayCount = await prisma.announcement.count({
+      where: { projectId: project.id, createdAt: { gte: today } },
+    });
+    if (todayCount >= 3) {
+      return Response.json(
+        { error: "Announcement limit reached for today (3/day per project)" },
+        { status: 429 },
+      );
+    }
+
+    const body = CreateAnnouncementSchema.parse(await req.json());
+
+    const announcement = await prisma.announcement.create({
+      data: {
+        projectId: project.id,
+        authorId: user.id,
+        title: body.title,
+        body: body.body,
+        kind: body.kind,
+        publishedAt: new Date(),
+      },
+    });
+
+    // Notify all active members (except the author)
+    const memberships = await prisma.membership.findMany({
+      where: { projectId: project.id, leftAt: null, userId: { not: user.id } },
+    });
+    if (memberships.length > 0) {
+      await prisma.notification.createMany({
+        data: memberships.map((m) => ({
+          userId: m.userId,
+          kind: "new_thread" as const,
+          projectId: project.id,
+          announcementId: announcement.id,
+        })),
+      });
+    }
+
+    return Response.json(announcement, { status: 201 });
+  } catch (e) {
+    return apiError(e);
+  }
+}

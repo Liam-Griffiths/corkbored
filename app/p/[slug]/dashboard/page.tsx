@@ -28,16 +28,30 @@ async function getProject(slug: string) {
   });
   if (!project) return null;
 
-  const applications = await prisma.application.findMany({
-    where: { role: { projectId: project.id } },
-    orderBy: { createdAt: "desc" },
-    include: {
-      applicant: { select: { id: true, displayName: true, githubLogin: true } },
-      role: { select: { id: true, title: true, projectId: true } },
-    },
-  });
+  const [applications, announcements, contributions] = await Promise.all([
+    prisma.application.findMany({
+      where: { role: { projectId: project.id } },
+      orderBy: { createdAt: "desc" },
+      include: {
+        applicant: { select: { id: true, displayName: true, githubLogin: true } },
+        role: { select: { id: true, title: true, projectId: true } },
+      },
+    }),
+    prisma.announcement.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { author: { select: { displayName: true, githubLogin: true } } },
+    }),
+    prisma.contributionEvent.findMany({
+      where: { projectId: project.id },
+      orderBy: { occurredAt: "desc" },
+      take: 50,
+      include: { user: { select: { displayName: true, githubLogin: true } } },
+    }),
+  ]);
 
-  return { ...project, applications };
+  return { ...project, applications, announcements, contributions };
 }
 
 type Project = NonNullable<Awaited<ReturnType<typeof getProject>>>;
@@ -116,7 +130,11 @@ export default async function DashboardPage({ params, searchParams }: Props) {
           {tab === "team" && (
             <TeamTab project={project} currentUserId={session.user.id} isOwner={isOwner} />
           )}
-          {(tab === "tasks" || tab === "discussion" || tab === "announcements" || tab === "activity") && (
+          {tab === "announcements" && (
+            <AnnouncementsTab project={project} slug={slug} />
+          )}
+          {tab === "activity" && <ActivityTab project={project} />}
+          {(tab === "tasks" || tab === "discussion") && (
             <ComingSoon tab={tab} />
           )}
         </div>
@@ -383,10 +401,158 @@ function RemoveMemberForm({ membershipId, login, slug }: { membershipId: string;
   );
 }
 
+// ── Announcements tab ─────────────────────────────────────────────────────────
+
+const KIND_LABELS: Record<string, string> = {
+  update: "Update", release: "Release", roles_open: "Roles open", milestone: "Milestone",
+};
+
+function AnnouncementsTab({ project, slug }: { project: Project; slug: string }) {
+  return (
+    <div>
+      <PostAnnouncementForm projectId={project.id} slug={slug} />
+      <div className="mt-6 space-y-4">
+        {project.announcements.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-paper-edge p-6 text-center font-mono text-sm text-ink-soft">
+            No announcements yet.
+          </p>
+        ) : (
+          project.announcements.map((a) => (
+            <div key={a.id} className="rounded-lg border border-paper-edge bg-paper-bright p-4">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <span className="font-semibold text-sm text-ink">{a.title}</span>
+                <span className="rounded-full bg-board px-2 py-0.5 font-mono text-xs text-ink-soft">
+                  {KIND_LABELS[a.kind] ?? a.kind}
+                </span>
+                {a.moderationStatus === "held" && (
+                  <span className="rounded-full bg-[#fff8e1] px-2 py-0.5 font-mono text-xs text-pin-gold">held</span>
+                )}
+              </div>
+              <p className="text-sm text-ink/80 mb-1">{a.body}</p>
+              <p className="font-mono text-xs text-ink-soft">
+                by {a.author?.displayName ?? a.author?.githubLogin} · {a.publishedAt ? new Date(a.publishedAt).toLocaleDateString() : "draft"}
+              </p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PostAnnouncementForm({ projectId, slug }: { projectId: string; slug: string }) {
+  async function postAnnouncement(formData: FormData) {
+    "use server";
+    const { auth: getAuth } = await import("@/lib/auth");
+    const session = await getAuth();
+    if (!session?.user?.id) return;
+
+    const title = (formData.get("title") as string)?.trim();
+    const body = (formData.get("body") as string)?.trim();
+    const kind = (formData.get("kind") as string) || "update";
+    if (!title || !body) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const count = await prisma.announcement.count({ where: { projectId, createdAt: { gte: today } } });
+    if (count >= 3) return;
+
+    await prisma.announcement.create({
+      data: { projectId, authorId: session.user.id, title, body, kind: kind as "update" | "release" | "roles_open" | "milestone", publishedAt: new Date() },
+    });
+
+    const { redirect } = await import("next/navigation");
+    redirect(`/p/${slug}/dashboard?tab=announcements`);
+  }
+
+  return (
+    <form action={postAnnouncement} className="rounded-lg border border-paper-edge p-4">
+      <p className="mb-3 font-mono text-xs uppercase tracking-widest text-ink-soft">Post an announcement</p>
+      <div className="flex flex-col gap-2">
+        <input
+          name="title"
+          required
+          placeholder="Announcement title"
+          maxLength={120}
+          className="w-full rounded-md border border-paper-edge bg-paper px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
+        />
+        <select
+          name="kind"
+          className="rounded-md border border-paper-edge bg-paper px-3 py-2 font-mono text-sm text-ink focus:outline-2 focus:outline-pin-gold"
+        >
+          <option value="update">Update</option>
+          <option value="release">Release</option>
+          <option value="roles_open">Roles open</option>
+          <option value="milestone">Milestone</option>
+        </select>
+        <textarea
+          name="body"
+          required
+          placeholder="What's new?"
+          rows={3}
+          maxLength={5000}
+          className="w-full rounded-md border border-paper-edge bg-paper px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold resize-y"
+        />
+        <button type="submit" className="self-start rounded-md bg-pin-teal px-4 py-2 font-mono text-sm text-white shadow-[0_2px_0_#0e5a47] hover:-translate-y-px">
+          Publish
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ── Activity tab ──────────────────────────────────────────────────────────────
+
+const EVENT_LABELS: Record<string, string> = {
+  commit: "pushed a commit",
+  pr_merged: "merged a PR",
+  release: "published a release",
+  manual: "completed a task",
+};
+
+function ActivityTab({ project }: { project: Project }) {
+  if (project.contributions.length === 0) {
+    return (
+      <div className="rounded-lg border border-dashed border-paper-edge p-8 text-center">
+        <p className="font-mono text-sm text-ink-soft">No activity yet.</p>
+        <p className="font-mono text-xs text-ink-soft mt-1">
+          Activity populates once your GitHub App webhook is configured.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-dashed divide-paper-edge">
+      {project.contributions.map((ev) => {
+        const meta = ev.metadata as Record<string, unknown> | null;
+        return (
+          <div key={ev.id} className="flex gap-3 py-3 text-sm">
+            <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-pin-gold text-xs font-semibold text-ink">
+              {(ev.user?.displayName ?? ev.user?.githubLogin ?? "?")[0].toUpperCase()}
+            </span>
+            <div>
+              <span className="font-medium text-ink">{ev.user?.displayName ?? ev.user?.githubLogin}</span>{" "}
+              <span className="text-ink-soft">{EVENT_LABELS[ev.kind] ?? ev.kind}</span>
+              {!!meta?.message && (
+                <p className="font-mono text-xs text-ink-soft mt-0.5 truncate max-w-md">{String(meta.message)}</p>
+              )}
+              {!!meta?.title && !meta.message && (
+                <p className="font-mono text-xs text-ink-soft mt-0.5">{String(meta.title)}</p>
+              )}
+              <p className="font-mono text-xs text-ink-soft/60 mt-0.5">{new Date(ev.occurredAt).toLocaleString()}</p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Coming soon ───────────────────────────────────────────────────────────────
 
 const TAB_PHASES: Record<string, string> = {
-  tasks: "Phase 8", discussion: "Phase 8", announcements: "Phase 5", activity: "Phase 5",
+  tasks: "Phase 8", discussion: "Phase 8",
 };
 
 function ComingSoon({ tab }: { tab: string }) {
