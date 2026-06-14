@@ -205,6 +205,7 @@ model Project {
   tasks         Task[]
   messages      Message[]
   contributions ContributionEvent[]
+  notifications Notification[]
 
   @@index([moderationStatus, createdAt(sort: Desc)])
 }
@@ -347,11 +348,13 @@ model Notification {
   applicationId  String?
   announcementId String?
   readAt         DateTime?
+  emailedAt      DateTime?
   createdAt      DateTime         @default(now())
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   application  Application?  @relation(fields: [applicationId], references: [id])
   announcement Announcement? @relation(fields: [announcementId], references: [id])
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt(sort: Desc)])
 }

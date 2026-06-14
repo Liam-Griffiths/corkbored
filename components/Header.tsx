@@ -1,9 +1,29 @@
 import Link from "next/link";
 import { auth, signIn, signOut } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { NotificationBell } from "./NotificationBell";
 
 export async function Header() {
   const session = await auth();
   const user = session?.user;
+
+  const notifications = user?.id
+    ? await prisma.notification.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      })
+    : [];
+
+  async function markAllRead() {
+    "use server";
+    const s = await auth();
+    if (!s?.user?.id) return;
+    await prisma.notification.updateMany({
+      where: { userId: s.user.id, readAt: null },
+      data: { readAt: new Date() },
+    });
+  }
 
   return (
     <header className="sticky top-0 z-20 border-b border-ink/10 bg-board/95 backdrop-blur-sm">
@@ -37,6 +57,12 @@ export async function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          {user && (
+            <NotificationBell
+              notifications={notifications}
+              markAllReadAction={markAllRead}
+            />
+          )}
           {user ? (
             <>
               <span className="flex items-center gap-2 font-mono text-sm text-ink-soft">
