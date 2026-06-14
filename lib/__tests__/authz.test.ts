@@ -39,7 +39,7 @@ describe("requireUser", () => {
   });
 
   it("throws 401 when no session", async () => {
-    mockAuth.mockResolvedValue(null);
+    mockAuth.mockResolvedValue(null as never);
     await expect(requireUser()).rejects.toMatchObject({
       status: 401,
     });
@@ -123,7 +123,7 @@ describe("requireAdmin", () => {
   });
 
   it("throws 401 when not signed in", async () => {
-    mockAuth.mockResolvedValue(null);
+    mockAuth.mockResolvedValue(null as never);
     await expect(requireAdmin()).rejects.toMatchObject({ status: 401 });
   });
 });
