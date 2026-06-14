@@ -1,3 +1,8 @@
 import nextConfig from 'eslint-config-next'
 
-export default nextConfig
+const config = [
+  { ignores: ['lib/generated/**', 'node_modules/**', '.next/**'] },
+  ...nextConfig,
+]
+
+export default config

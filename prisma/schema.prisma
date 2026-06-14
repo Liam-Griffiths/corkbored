@@ -1,0 +1,389 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =========== Enums ===========
+
+enum ProjectStage {
+  building
+  prototype
+  launched
+}
+
+enum ModerationStatus {
+  published
+  held
+  removed
+}
+
+enum RoleStatus {
+  open
+  filled
+  closed
+}
+
+enum ApplicationStatus {
+  pending
+  accepted
+  declined
+}
+
+enum InviteStatus {
+  none
+  pending
+  sent
+  accepted
+  failed
+}
+
+enum MembershipRole {
+  owner
+  maintainer
+  member
+}
+
+enum TaskStatus {
+  todo
+  doing
+  done
+}
+
+enum ContributionKind {
+  commit
+  pr_merged
+  release
+  manual  // task completions use kind=manual with externalId=task.id
+}
+
+enum AnnouncementKind {
+  update
+  release
+  roles_open
+  milestone
+}
+
+enum NotificationKind {
+  application_received
+  application_decided
+  invite_accepted
+  new_thread
+}
+
+enum ReportSubjectType {
+  project
+  application
+  announcement
+}
+
+enum ModerationVerdict {
+  clean
+  borderline
+  spam
+}
+
+// =========== Auth.js adapter models ===========
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =========== Core models ===========
+
+model User {
+  id            String    @id @default(cuid())
+  // Auth.js required
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  // GitHub profile
+  githubId      Int?      @unique
+  githubLogin   String?   @unique
+  displayName   String?
+  avatarUrl     String?
+  // App profile
+  isAdmin       Boolean   @default(false)
+  availability  String?
+  hoursPerWeek  Int?
+  lookingFor    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  skills              UserSkill[]
+  githubStats         GithubStats?
+  ownedProjects       Project[]      @relation("ProjectOwner")
+  memberships         Membership[]
+  applications        Application[]
+  notifications       Notification[]
+  reports             Report[]
+  removedMemberships  Membership[]   @relation("RemovedBy")
+  moderationDecisions ModerationItem[]
+  assignedTasks       Task[]
+}
+
+model UserSkill {
+  userId String
+  skill  String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skill])
+}
+
+model GithubStats {
+  userId         String   @id
+  accountAgeYears Float?
+  publicRepos    Int?
+  commitsLast90d Int?
+  topLanguages   Json?
+  refreshedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Project {
+  id               String           @id @default(cuid())
+  slug             String           @unique
+  title            String
+  pitch            String?          @db.Text
+  repoId           String           @unique
+  repoFullName     String
+  stage            ProjectStage     @default(building)
+  moderationStatus ModerationStatus @default(published)
+  license          String?
+  defaultBranch    String           @default("main")
+  ownerId          String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  owner         User                @relation("ProjectOwner", fields: [ownerId], references: [id])
+  tags          ProjectTag[]
+  roles         Role[]
+  memberships   Membership[]
+  announcements Announcement[]
+  tasks         Task[]
+  messages      Message[]
+  contributions ContributionEvent[]
+
+  @@index([moderationStatus, createdAt(sort: Desc)])
+}
+
+model ProjectTag {
+  projectId String
+  tag       String
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, tag])
+  @@index([tag])
+}
+
+model Role {
+  id        String     @id @default(cuid())
+  projectId String
+  title     String
+  detail    String?
+  status    RoleStatus @default(open)
+  createdAt DateTime   @default(now())
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([projectId, status])
+}
+
+model Application {
+  id                 String            @id @default(cuid())
+  roleId             String
+  applicantId        String
+  pitch              String            @db.Text
+  status             ApplicationStatus @default(pending)
+  moderationStatus   ModerationStatus  @default(published)
+  githubStatsCache   Json?
+  githubInviteStatus InviteStatus      @default(none)
+  createdAt          DateTime          @default(now())
+
+  role            Role             @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  applicant       User             @relation(fields: [applicantId], references: [id])
+  moderationItems ModerationItem[]
+  notifications   Notification[]
+
+  @@unique([roleId, applicantId])
+  @@index([applicantId])
+}
+
+model Membership {
+  id          String         @id @default(cuid())
+  projectId   String
+  userId      String
+  role        MembershipRole @default(member)
+  joinedAt    DateTime       @default(now())
+  leftAt      DateTime?
+  removedById String?
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id])
+  removedBy User?   @relation("RemovedBy", fields: [removedById], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ContributionEvent {
+  id         String           @id @default(cuid())
+  projectId  String
+  userId     String
+  kind       ContributionKind
+  externalId String?
+  metadata   Json?
+  occurredAt DateTime         @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Dedup: same external event can only be recorded once per project+kind combo
+  // externalId=task.id for manual contributions, commit SHA / PR id for GitHub events
+  @@unique([projectId, kind, externalId])
+  @@index([projectId, userId])
+}
+
+model Task {
+  id         String     @id @default(cuid())
+  projectId  String
+  title      String
+  status     TaskStatus @default(todo)
+  position   Float      @default(0)
+  assigneeId String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee User?   @relation(fields: [assigneeId], references: [id])
+
+  @@index([projectId, status, position])
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  projectId String
+  authorId  String
+  parentId  String?
+  body      String    @db.Text
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent  Message?  @relation("ThreadReplies", fields: [parentId], references: [id])
+  replies Message[] @relation("ThreadReplies")
+
+  @@index([projectId, parentId, createdAt])
+}
+
+model Announcement {
+  id               String           @id @default(cuid())
+  projectId        String
+  authorId         String
+  title            String
+  body             String           @db.Text
+  kind             AnnouncementKind @default(update)
+  moderationStatus ModerationStatus @default(published)
+  publishedAt      DateTime?
+  createdAt        DateTime         @default(now())
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  moderationItems ModerationItem[]
+  notifications   Notification[]
+
+  @@index([moderationStatus, createdAt(sort: Desc)])
+}
+
+model Notification {
+  id             String           @id @default(cuid())
+  userId         String
+  kind           NotificationKind
+  projectId      String?
+  applicationId  String?
+  announcementId String?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application  Application?  @relation(fields: [applicationId], references: [id])
+  announcement Announcement? @relation(fields: [announcementId], references: [id])
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+}
+
+model Report {
+  id          String            @id @default(cuid())
+  reporterId  String
+  subjectType ReportSubjectType
+  subjectId   String
+  reason      String            @db.Text
+  createdAt   DateTime          @default(now())
+
+  reporter        User             @relation(fields: [reporterId], references: [id])
+  moderationItems ModerationItem[]
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model ModerationItem {
+  id             String             @id @default(cuid())
+  subjectType    ReportSubjectType
+  subjectId      String
+  verdict        ModerationVerdict?
+  confidence     Float?
+  reasons        String?            @db.Text
+  decidedById    String?
+  decidedAt      DateTime?
+  applicationId  String?
+  announcementId String?
+  reportId       String?
+  createdAt      DateTime           @default(now())
+
+  decidedBy    User?         @relation(fields: [decidedById], references: [id])
+  application  Application?  @relation(fields: [applicationId], references: [id])
+  announcement Announcement? @relation(fields: [announcementId], references: [id])
+  report       Report?       @relation(fields: [reportId], references: [id])
+
+  @@index([verdict, createdAt(sort: Desc)])
+}
