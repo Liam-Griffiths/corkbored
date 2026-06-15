@@ -51,7 +51,7 @@ export async function Header() {
               href="/me"
               className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"
             >
-              my projects
+              profile
             </Link>
           )}
         </nav>
