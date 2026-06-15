@@ -74,19 +74,7 @@ export default async function ApplyPage({ params }: Props) {
       },
     });
 
-    const ownerMembership = await prisma.membership.findFirst({
-      where: { projectId, role: "owner", leftAt: null },
-    });
-    if (ownerMembership) {
-      await prisma.notification.create({
-        data: {
-          userId: ownerMembership.userId,
-          kind: "application_received",
-          projectId,
-          applicationId: app.id,
-        },
-      });
-    }
+    // Notification handled by /api/roles/[id]/applications route — not duplicated here.
 
     redirect(`/p/${slug}?applied=1`);
   }

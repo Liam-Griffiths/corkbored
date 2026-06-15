@@ -16,7 +16,8 @@ const KIND_TEXT: Record<string, string> = {
   application_received: "New application received",
   application_decided: "Your application was reviewed",
   invite_accepted: "Invite accepted",
-  new_thread: "New project announcement",
+  new_thread: "New discussion thread",
+  new_announcement: "New project announcement",
 };
 
 export function NotificationBell({

@@ -72,6 +72,7 @@ enum NotificationKind {
   application_decided
   invite_accepted
   new_thread
+  new_announcement
 }
 
 enum ReportSubjectType {

@@ -85,7 +85,7 @@ export async function POST(
       await prisma.notification.createMany({
         data: memberships.map((m) => ({
           userId: m.userId,
-          kind: "new_thread" as const,
+          kind: "new_announcement" as const,
           projectId: project.id,
           announcementId: announcement.id,
         })),
