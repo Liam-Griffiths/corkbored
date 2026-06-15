@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corkbored — App Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board:#f0e8d8; --board-deep:#e4d8c2;
+    --paper:#fffdf8; --paper-edge:#e8dcc6; --paper-bright:#ffffff;
+    --ink:#2b1f14; --ink-soft:#7a6652;
+    --pin-red:#c94e2a; --pin-teal:#2a7d5f; --pin-gold:#b8891a;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --display:'Bricolage Grotesque',var(--sans);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:var(--sans);color:var(--ink);background:var(--board);line-height:1.55;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .06 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  button{font-family:inherit;cursor:pointer}
+
+  /* ---- top bar ---- */
+  .topbar{border-bottom:1px solid rgba(43,31,20,.12);padding:16px 0;position:sticky;top:0;background:rgba(240,232,216,.96);backdrop-filter:blur(4px);z-index:20}
+  .topbar .wrap{display:flex;align-items:center;gap:26px}
+  .logo{font-family:var(--display);font-weight:800;font-size:1.15rem;background:none;border:none;color:var(--ink)}
+  .logo .pin{display:inline-block;width:.6em;height:.6em;border-radius:50%;background:var(--pin-red);box-shadow:inset -2px -2px 3px rgba(0,0,0,.35);margin-right:.35em}
+  .topnav{display:flex;gap:6px;flex:1}
+  .topnav button{font-family:var(--mono);font-size:.82rem;background:none;border:none;color:var(--ink);opacity:.7;padding:7px 12px;border-radius:6px}
+  .topnav button.active{opacity:1;background:rgba(43,31,20,.1)}
+  .topnav button:hover{opacity:1}
+  .me{font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);display:flex;align-items:center;gap:8px}
+  .avatar{width:26px;height:26px;border-radius:50%;background:var(--pin-teal);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:600}
+
+  h1{font-family:var(--display);font-weight:800;letter-spacing:-.02em;font-size:1.7rem;margin:30px 0 6px}
+  .sub{color:var(--ink-soft);font-size:.92rem;margin-bottom:22px}
+
+  /* ---- filters ---- */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px}
+  .chip{font-family:var(--mono);font-size:.74rem;padding:6px 12px;border-radius:999px;border:1px solid rgba(43,31,20,.25);background:none;color:var(--ink)}
+  .chip.active{background:var(--pin-gold);border-color:var(--pin-gold);color:var(--ink);font-weight:500}
+
+  /* ---- board grid ---- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:26px;padding-bottom:60px}
+  .pcard{position:relative;background:var(--paper);color:var(--ink);border-radius:3px;padding:20px 18px 14px;box-shadow:0 8px 18px rgba(0,0,0,.4);text-align:left;border:none;transition:transform .15s ease, box-shadow .15s ease;font-family:var(--sans)}
+  .pcard:nth-child(3n+1){transform:rotate(-1.2deg)} .pcard:nth-child(3n+2){transform:rotate(.9deg)} .pcard:nth-child(3n){transform:rotate(-.5deg)}
+  .pcard:hover{transform:rotate(0) scale(1.03);box-shadow:0 14px 26px rgba(0,0,0,.5);z-index:3}
+  .pcard::before{content:"";position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:15px;height:15px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #ff8a72, var(--pin-red) 60%, #8c2716);box-shadow:0 3px 4px rgba(0,0,0,.5)}
+  .pcard.pin-teal::before{background:radial-gradient(circle at 35% 30%, #6fd4b8, var(--pin-teal) 60%, #0e5a47)}
+  .pcard.pin-gold::before{background:radial-gradient(circle at 35% 30%, #ffd97a, var(--pin-gold) 60%, #8a6312)}
+  .repo{font-family:var(--mono);font-size:.74rem;color:var(--ink-soft);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pcard h3{font-family:var(--display);font-weight:600;font-size:1.05rem;line-height:1.25;margin-bottom:8px}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .tag{font-family:var(--mono);font-size:.64rem;background:var(--paper-edge);border-radius:3px;padding:2px 7px;color:var(--ink-soft)}
+  .needline{font-size:.8rem;border-top:1px dashed var(--paper-edge);padding-top:8px}
+  .needline strong{color:var(--pin-red)}
+
+  /* ---- paper panel (project + dashboard) ---- */
+  .panel{background:var(--paper);color:var(--ink);border-radius:4px;box-shadow:0 14px 30px rgba(0,0,0,.45);padding:30px;margin:26px 0 60px}
+  .backlink{font-family:var(--mono);font-size:.78rem;background:none;border:none;color:var(--ink-soft);margin-top:22px;padding:0}
+  .backlink:hover{color:var(--ink)}
+  .phead{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:flex-start;border-bottom:1px solid var(--paper-edge);padding-bottom:18px;margin-bottom:20px}
+  .phead h2{font-family:var(--display);font-weight:800;font-size:1.6rem;letter-spacing:-.02em}
+  .stage{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:3px;background:var(--pin-teal);color:#fff;vertical-align:middle;margin-left:10px}
+  .stage.prototype{background:var(--pin-gold);color:var(--ink)} .stage.launched{background:var(--pin-red)}
+  .panel p.desc{max-width:62ch;color:#473a2e;margin-bottom:18px}
+  .cols{display:grid;grid-template-columns:1.5fr 1fr;gap:30px}
+  .panel h4{font-family:var(--mono);font-size:.74rem;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);margin:18px 0 10px}
+  .need{border:1.5px solid var(--paper-edge);border-radius:8px;padding:14px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--paper-bright)}
+  .need .t{font-weight:600}
+  .need .d{font-size:.82rem;color:var(--ink-soft)}
+  .btn{font-family:var(--mono);font-size:.82rem;font-weight:500;border:none;border-radius:6px;padding:9px 16px;transition:transform .1s ease}
+  .btn-red{background:var(--pin-red);color:#fff;box-shadow:0 2px 0 #9c2f1d} .btn-red:hover{transform:translateY(-1px)}
+  .btn-teal{background:var(--pin-teal);color:#fff;box-shadow:0 2px 0 #0e5a47} .btn-teal:hover{transform:translateY(-1px)}
+  .btn-quiet{background:none;border:1.5px solid var(--paper-edge);color:var(--ink-soft)} .btn-quiet:hover{border-color:var(--ink-soft)}
+  .member{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--paper-edge);font-size:.88rem}
+  .member:last-child{border:none}
+  .member .avatar{background:var(--pin-gold);color:var(--ink)}
+  .member .h{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft)}
+  .ownerbadge{font-family:var(--mono);font-size:.62rem;background:var(--ink);color:var(--paper);padding:2px 7px;border-radius:3px;margin-left:auto}
+
+  /* ---- dashboard tabs ---- */
+  .tabs{display:flex;gap:4px;border-bottom:1.5px solid var(--paper-edge);margin-bottom:20px;flex-wrap:wrap}
+  .tabs button{font-family:var(--mono);font-size:.8rem;background:none;border:none;padding:10px 14px;color:var(--ink-soft);border-bottom:2.5px solid transparent;margin-bottom:-1.5px}
+  .tabs button.active{color:var(--ink);border-bottom-color:var(--pin-red);font-weight:500}
+  .count{display:inline-block;min-width:18px;text-align:center;background:var(--pin-red);color:#fff;border-radius:999px;font-size:.64rem;padding:1px 5px;margin-left:6px}
+
+  .app-row{border:1.5px solid var(--paper-edge);border-radius:8px;padding:16px;margin-bottom:14px;background:var(--paper-bright)}
+  .app-row .top{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .app-row .name{font-weight:600}
+  .gh{font-family:var(--mono);font-size:.7rem;color:var(--ink-soft)}
+  .signal{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);margin:8px 0 10px}
+  .signal b{color:var(--ink)}
+  .pitch{font-size:.88rem;background:var(--paper);border-left:3px solid var(--pin-gold);padding:8px 12px;border-radius:0 6px 6px 0;margin-bottom:12px;color:#473a2e}
+  .actions{display:flex;gap:10px}
+  .status-pill{font-family:var(--mono);font-size:.68rem;padding:3px 10px;border-radius:999px}
+  .status-pill.accepted{background:#d9efe6;color:var(--pin-teal)} .status-pill.declined{background:#f4ded9;color:var(--pin-red)}
+
+  .feed{list-style:none}
+  .feed li{display:flex;gap:12px;padding:10px 0;border-bottom:1px dashed var(--paper-edge);font-size:.86rem;align-items:baseline}
+  .feed li:last-child{border:none}
+  .feed .when{font-family:var(--mono);font-size:.68rem;color:var(--ink-soft);min-width:64px}
+  .feed code{font-family:var(--mono);font-size:.76rem;background:var(--paper-edge);padding:1px 6px;border-radius:3px}
+
+  .empty{text-align:center;color:var(--ink-soft);font-size:.88rem;padding:30px 10px;border:1.5px dashed var(--paper-edge);border-radius:8px}
+
+  /* ---- modal ---- */
+  .overlay{position:fixed;inset:0;background:rgba(30,22,17,.7);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .overlay.open{display:flex}
+  .modal{background:var(--paper);color:var(--ink);border-radius:4px;max-width:480px;width:100%;padding:28px;position:relative;box-shadow:0 20px 50px rgba(0,0,0,.6)}
+  .modal::before{content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%);width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 35% 30%, #ff8a72, var(--pin-red) 60%, #8c2716);box-shadow:0 3px 4px rgba(0,0,0,.5)}
+  .modal h3{font-family:var(--display);font-weight:600;font-size:1.2rem;margin-bottom:4px}
+  .modal .for{font-family:var(--mono);font-size:.76rem;color:var(--ink-soft);margin-bottom:14px}
+  .modal textarea{width:100%;min-height:110px;font-family:var(--sans);font-size:.9rem;padding:12px;border:1.5px solid var(--paper-edge);border-radius:8px;background:var(--paper-bright);resize:vertical;color:var(--ink)}
+  .modal textarea:focus{outline:2px solid var(--pin-gold)}
+  .modal .hint{font-size:.74rem;color:var(--ink-soft);margin:6px 0 16px}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) rotate(-1deg);background:var(--paper);color:var(--ink);font-family:var(--mono);font-size:.82rem;padding:12px 20px;border-radius:3px;box-shadow:0 10px 24px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:60}
+  .toast.show{opacity:1}
+
+  @media (max-width:760px){.cols{grid-template-columns:1fr}}
+  @media (prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <button class="logo" onclick="go('board')"><span class="pin"></span>corkbored</button>
+    <nav class="topnav">
+      <button id="nav-board" class="active" onclick="go('board')">the board</button>
+      <button id="nav-dash" onclick="go('dash')">my project</button>
+      <button id="nav-mod" onclick="go('mod')">mod queue</button>
+    </nav>
+    <span class="me"><span class="avatar">JQ</span>jq-dev</span>
+  </div>
+</div>
+
+<main class="wrap" id="view"></main>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>Apply to collaborate</h3>
+    <p class="for" id="modal-for"></p>
+    <textarea id="pitch" placeholder="Why you, why this project? Keep it short — your GitHub history travels with this."></textarea>
+    <p class="hint">Your profile, languages, and recent activity are attached automatically.</p>
+    <div class="actions">
+      <button class="btn btn-red" onclick="submitApplication()">Send application</button>
+      <button class="btn btn-quiet" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- mock data (in-memory only) ----------
+const me = { id:'u-jq', name:'JQ', login:'jq-dev' };
+
+const projects = [
+  { id:'p1', slug:'ledgerline', title:'Open-source budgeting for freelancers', repo:'mira/ledgerline',
+    stage:'launched', pin:'pin-red', tags:['TypeScript','Postgres'], ownerId:'u-mira',
+    desc:'Plain-text-friendly budgeting that imports bank CSVs, tracks irregular freelance income, and forecasts dry months. 1.2k stars, real users, needs mobile.',
+    needs:[{id:'n1',title:'Mobile dev (React Native)',detail:'~5 hrs/wk · own the iOS/Android client'}],
+    members:[{id:'u-mira',name:'Mira',login:'mira',owner:true},{id:'u-tom',name:'Tom',login:'tomwrites'}] },
+  { id:'p2', slug:'trailcache', title:'Offline maps for backcountry hikers', repo:'dev-sara/trailcache',
+    stage:'building', pin:'pin-teal', tags:['Rust','React Native'], ownerId:'u-sara',
+    desc:'Vector tiles compiled to a single offline bundle. Works with zero bars on a ridgeline. Backend is Rust; client is React Native.',
+    needs:[{id:'n2',title:'Rust dev (backend)',detail:'tile pipeline + sync protocol'},{id:'n3',title:'Design engineer',detail:'map UI, ~4 hrs/wk'}],
+    members:[{id:'u-sara',name:'Sara',login:'dev-sara',owner:true}] },
+  { id:'p3', slug:'promptpit', title:'Self-hosted eval harness for LLM apps', repo:'jq-dev/promptpit',
+    stage:'prototype', pin:'pin-gold', tags:['Python','SQLite'], ownerId:'u-jq',
+    desc:'Run regression evals on your prompts locally. Diff model outputs across versions, score with rubrics, no cloud required.',
+    needs:[{id:'n4',title:'Frontend dev',detail:'results dashboard UI'},{id:'n5',title:'Design engineer',detail:'make it not look like a science project'}],
+    members:[{id:'u-jq',name:'JQ',login:'jq-dev',owner:true},{id:'u-ana',name:'Ana',login:'ana-builds'}] },
+  { id:'p4', slug:'patchbay', title:'Browser-based modular synth', repo:'noiseboy/patchbay',
+    stage:'building', pin:'pin-red', tags:['TypeScript','WebAudio'], ownerId:'u-nb',
+    desc:'Drag-and-drop oscillators, filters, and sequencers in the browser. Shareable patches via URL.',
+    needs:[{id:'n6',title:'DSP nerd',detail:'filters + effects chain'}],
+    members:[{id:'u-nb',name:'Noah',login:'noiseboy',owner:true}] },
+];
+
+// applications to MY project (promptpit) — the dashboard inbox
+let inbox = [
+  { id:'a1', needId:'n4', name:'Priya N.', login:'priya-codes', status:'pending',
+    signal:{age:'6 yrs', repos:34, commits90:212, langs:'TS 58% · Py 30%'},
+    pitch:'I built the results UI for an internal eval tool at my last job — happy to share screenshots. I can commit ~6 hrs/wk and want to ship something real while job hunting.' },
+  { id:'a2', needId:'n5', name:'Marcus L.', login:'mlux', status:'pending',
+    signal:{age:'4 yrs', repos:19, commits90:98, langs:'TS 71% · CSS 22%'},
+    pitch:'Design engineer, ex-startup. Your screenshots hurt me in a way I would like to fix. Portfolio in my pinned repos.' },
+  { id:'a3', needId:'n4', name:'Dev T.', login:'devt-2026', status:'pending',
+    signal:{age:'3 wks', repos:1, commits90:2, langs:'—'},
+    pitch:'i can do it' },
+];
+
+let myApplications = []; // applications I send from the board
+const activity = [
+  {when:'2h ago', who:'ana-builds', what:'merged PR', ref:'#42', note:'rubric scoring v2'},
+  {when:'1d ago', who:'jq-dev', what:'pushed', ref:'3 commits', note:'sqlite migration + diff view fix'},
+  {when:'2d ago', who:'ana-builds', what:'opened PR', ref:'#41', note:'CSV export for eval runs'},
+  {when:'5d ago', who:'jq-dev', what:'release', ref:'v0.3.0', note:'first public prototype'},
+];
+
+// per-project announcements (devlog); newest first
+let announcements = [
+  {id:'an1', projectId:'p3', author:'jq-dev', when:'1d ago', kind:'release',
+   title:'v0.3.0 is out', body:'First public prototype. Diff view, rubric scoring, SQLite storage. Frontend is held together with tape — hence the open roles.'},
+  {id:'an2', projectId:'p1', author:'mira', when:'2d ago', kind:'roles_open',
+   title:'Mobile role just opened', body:'Web app is stable, 1.2k stars. Time for a real mobile client — looking for one React Native dev who wants ownership of it.'},
+  {id:'an3', projectId:'p2', author:'dev-sara', when:'4d ago', kind:'milestone',
+   title:'Offline bundles under 40MB', body:'Whole national park now fits in a single offline bundle. Sync protocol next.'},
+];
+
+// admin moderation queue — mock LLM triage verdicts
+let modQueue = [
+  {id:'m1', subject:'application · @devt-2026 → promptpit', verdict:'borderline', confidence:.71,
+   reasons:'Very low-effort pitch ("i can do it"), 3-week-old account, 2 commits in 90 days. Not abusive — likely a new dev, not a bot.', decided:null},
+  {id:'m2', subject:'project · "AI Crypto Signals PRO"', verdict:'spam', confidence:.97,
+   reasons:'Repo is a fork with zero original commits. Pitch contains external payment links and "guaranteed returns" language. Auto-held before publishing.', decided:null},
+  {id:'m3', subject:'announcement · patchbay "v0.2 sequencer update"', verdict:'clean', confidence:.99,
+   reasons:'Routine devlog post from an active project. Published instantly.', decided:'auto-published'},
+];
+
+// kanban tasks for promptpit
+let tasks = [
+  {id:'t1', title:'Results dashboard wireframe', status:'todo', assignee:null},
+  {id:'t2', title:'Rubric scoring edge cases', status:'todo', assignee:'JQ'},
+  {id:'t3', title:'CSV export for eval runs', status:'doing', assignee:'Ana'},
+  {id:'t4', title:'SQLite migration', status:'done', assignee:'JQ'},
+  {id:'t5', title:'Diff view rendering fix', status:'done', assignee:'JQ'},
+];
+
+// discussion threads for promptpit (one level of replies)
+let threads = [
+  {id:'th1', author:'ana-builds', when:'1d ago', body:'Should eval runs be immutable once scored? Leaning yes — re-scoring silently would make results untrustworthy.',
+   replies:[{author:'jq-dev', when:'1d ago', body:'Agreed. Re-score = new run, old one stays. Versioned runs.'}]},
+  {id:'th2', author:'jq-dev', when:'3d ago', body:'Frontend candidates are applying — see the Applications tab. Priya looks strong.',
+   replies:[]},
+];
+
+// ---------- state & routing ----------
+let route = {name:'board'};
+let activeTag = 'all';
+let dashTab = 'apps';
+let applyTarget = null;
+
+function go(name, arg){ route = {name, arg}; render(); window.scrollTo(0,0); }
+
+function render(){
+  document.getElementById('nav-board').classList.toggle('active', route.name==='board'||route.name==='project');
+  document.getElementById('nav-dash').classList.toggle('active', route.name==='dash');
+  document.getElementById('nav-mod').classList.toggle('active', route.name==='mod');
+  const v = document.getElementById('view');
+  if(route.name==='board') v.innerHTML = boardView();
+  else if(route.name==='project') v.innerHTML = projectView(route.arg);
+  else if(route.name==='dash') v.innerHTML = dashView();
+  else if(route.name==='mod') v.innerHTML = modView();
+}
+
+// ---------- views ----------
+function boardView(){
+  const tags = ['all', ...new Set(projects.flatMap(p=>p.tags))];
+  const list = projects.filter(p=> activeTag==='all' || p.tags.includes(activeTag));
+  return `
+    <h1>The board</h1>
+    <p class="sub">Real repos, real commits, looking for collaborators. Pick a card.</p>
+    <h4 style="font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--pin-gold);margin-bottom:10px">Fresh off the board</h4>
+    <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:14px;margin-bottom:18px">
+      ${announcements.map(a=>{const pr=projects.find(p=>p.id===a.projectId);return `
+        <button onclick="go('project','${pr.id}')" style="flex:0 0 auto;max-width:280px;text-align:left;background:rgba(43,31,20,.05);border:1px solid rgba(43,31,20,.14);border-radius:8px;padding:12px 14px;color:var(--ink);font-family:var(--sans)">
+          <div style="font-family:var(--mono);font-size:.64rem;color:var(--pin-gold);margin-bottom:4px">${pr.slug} · ${a.kind.replace('_',' ')} · ${a.when}</div>
+          <div style="font-weight:600;font-size:.88rem">${a.title}</div>
+        </button>`}).join('')}
+    </div>
+    <div class="filters">${tags.map(t=>`<button class="chip ${t===activeTag?'active':''}" onclick="setTag('${t}')">${t}</button>`).join('')}</div>
+    <div class="grid">
+      ${list.map(p=>`
+        <button class="pcard ${p.pin}" onclick="go('project','${p.id}')">
+          <p class="repo">github.com/${p.repo}</p>
+          <h3>${p.title}</h3>
+          <div class="tags">${p.tags.map(t=>`<span class="tag">${t}</span>`).join('')}<span class="tag">${p.stage}</span></div>
+          <p class="needline"><strong>Needs:</strong> ${p.needs.map(n=>n.title).join(' · ')||'team is full'}</p>
+        </button>`).join('')}
+    </div>`;
+}
+function setTag(t){ activeTag=t; render(); }
+
+function projectView(id){
+  const p = projects.find(x=>x.id===id);
+  const mine = p.ownerId===me.id;
+  return `
+    <button class="backlink" onclick="go('board')">&larr; back to the board</button>
+    <div class="panel">
+      <div class="phead">
+        <div>
+          <h2>${p.title}<span class="stage ${p.stage}">${p.stage}</span></h2>
+          <p class="repo" style="margin-top:6px">github.com/${p.repo}</p>
+        </div>
+        ${mine?`<button class="btn btn-teal" onclick="go('dash')">Open dashboard</button>`:`<button class="btn btn-quiet" onclick="reportContent('project · ${p.slug}')">Report</button>`}
+      </div>
+      <p class="desc">${p.desc}</p>
+      ${(()=>{const ann=announcements.filter(a=>a.projectId===p.id);return ann.length?`
+      <h4>Announcements</h4>
+      ${ann.map(a=>`<div class="app-row" style="margin-bottom:10px">
+        <div class="top"><span class="name">${a.title}</span><span class="gh">@${a.author} · ${a.when}</span>
+        <button class="btn btn-quiet" style="margin-left:auto;padding:4px 10px;font-size:.68rem" onclick="reportContent('announcement · ${a.id}')">report</button></div>
+        <p style="font-size:.86rem;color:#473a2e">${a.body}</p>
+      </div>`).join('')}`:''})()}
+      <div class="cols">
+        <div>
+          <h4>Looking for collaborators</h4>
+          ${p.needs.length? p.needs.map(n=>{
+            const applied = myApplications.find(a=>a.needId===n.id);
+            return `<div class="need">
+              <div><div class="t">${n.title}</div><div class="d">${n.detail}</div></div>
+              ${mine?'<span class="gh">your project</span>': applied
+                ? '<span class="status-pill accepted">applied ✓</span>'
+                : `<button class="btn btn-red" onclick="openApply('${p.id}','${n.id}')">Apply</button>`}
+            </div>`;}).join('') : '<div class="empty">Team is full right now.</div>'}
+        </div>
+        <div>
+          <h4>Team</h4>
+          ${p.members.map(m=>`<div class="member"><span class="avatar">${m.name[0]}</span><div>${m.name}<div class="h">@${m.login}</div></div>${m.owner?'<span class="ownerbadge">owner</span>':''}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function dashView(){
+  const p = projects.find(x=>x.id==='p3');
+  const pending = inbox.filter(a=>a.status==='pending').length;
+  let body='';
+  if(dashTab==='apps'){
+    body = inbox.length? inbox.map(a=>{
+      const need = p.needs.find(n=>n.id===a.needId) || {title:'(role closed)'};
+      return `<div class="app-row">
+        <div class="top"><span class="avatar">${a.name[0]}</span><span class="name">${a.name}</span><span class="gh">@${a.login} → ${need.title}</span>
+          ${a.status!=='pending'?`<span class="status-pill ${a.status}" style="margin-left:auto">${a.status}</span>`:''}</div>
+        <div class="signal"><span>account <b>${a.signal.age}</b></span><span>repos <b>${a.signal.repos}</b></span><span>commits/90d <b>${a.signal.commits90}</b></span><span><b>${a.signal.langs}</b></span></div>
+        <p class="pitch">${a.pitch}</p>
+        ${a.status==='pending'?`<div class="actions">
+          <button class="btn btn-teal" onclick="decide('${a.id}','accepted')">Accept &amp; invite to repo</button>
+          <button class="btn btn-quiet" onclick="decide('${a.id}','declined')">Decline</button>
+        </div>`:''}
+      </div>`;}).join('') : '<div class="empty">No applications yet. Share your project link.</div>';
+  } else if(dashTab==='team'){
+    body = p.members.map(m=>`<div class="member"><span class="avatar">${m.name[0]}</span><div>${m.name}<div class="h">@${m.login} · joined on record</div></div>${m.owner?'<span class="ownerbadge">owner</span>':'<button class="btn btn-quiet" style="margin-left:auto" onclick="removeMemberMock()">Remove</button>'}</div>`).join('')
+      + `<p class="gh" style="margin-top:14px">Every join and leave is timestamped — this record backs the contribution agreement later.</p>`;
+  } else if(dashTab==='activity'){
+    body = `<ul class="feed">${activity.map(e=>`<li><span class="when">${e.when}</span><span><b>@${e.who}</b> ${e.what} <code>${e.ref}</code> — ${e.note}</span></li>`).join('')}</ul>`;
+  } else if(dashTab==='announce'){
+    const mine = announcements.filter(a=>a.projectId==='p3');
+    body = `<div class="app-row" style="margin-bottom:18px">
+        <div class="top"><span class="name">Post an announcement</span><span class="gh">members &amp; followers get notified</span></div>
+        <input id="ann-title" placeholder="Title — e.g. v0.4 shipped" style="width:100%;font-family:var(--mono);font-size:.86rem;padding:10px 12px;border:1.5px solid var(--paper-edge);border-radius:6px;background:var(--paper);margin-bottom:8px;color:var(--ink)">
+        <textarea id="ann-body" placeholder="What's new?" style="width:100%;min-height:70px;font-family:var(--sans);font-size:.88rem;padding:10px 12px;border:1.5px solid var(--paper-edge);border-radius:6px;background:var(--paper);resize:vertical;color:var(--ink)"></textarea>
+        <div class="actions" style="margin-top:10px"><button class="btn btn-red" onclick="postAnnouncement()">Post</button>
+        <span class="gh" style="align-self:center">passes LLM triage before the global feed</span></div>
+      </div>`
+      + (mine.length? mine.map(a=>`<div class="app-row" style="margin-bottom:10px">
+          <div class="top"><span class="name">${a.title}</span><span class="gh">@${a.author} · ${a.when} · ${a.kind.replace('_',' ')}</span></div>
+          <p style="font-size:.86rem;color:#473a2e">${a.body}</p>
+        </div>`).join('') : '<div class="empty">No announcements yet — your project looks quieter than it is.</div>');
+  } else if(dashTab==='tasks'){
+    const cols = [['todo','To do'],['doing','Doing'],['done','Done']];
+    body = `<div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      ${cols.map(([key,label])=>`
+        <div ondragover="event.preventDefault()" ondrop="dropTask(event,'${key}')"
+             style="flex:1;min-width:200px;background:var(--paper-edge);border-radius:8px;padding:12px">
+          <h4 style="margin:0 0 10px">${label} · ${tasks.filter(t=>t.status===key).length}</h4>
+          ${key==='todo'?`<div style="display:flex;gap:6px;margin-bottom:10px">
+            <input id="new-task" placeholder="Add a task…" style="flex:1;font-family:var(--sans);font-size:.8rem;padding:8px 10px;border:1.5px solid #d9cbb2;border-radius:6px;background:var(--paper-bright);color:var(--ink)">
+            <button class="btn btn-red" style="padding:6px 12px" onclick="addTask()">+</button></div>`:''}
+          ${tasks.filter(t=>t.status===key).map(t=>`
+            <div draggable="true" ondragstart="dragTask(event,'${t.id}')"
+                 style="background:var(--paper-bright);border:1.5px solid #d9cbb2;border-radius:6px;padding:10px 12px;margin-bottom:8px;cursor:grab;font-size:.84rem">
+              ${t.title}
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+                <span class="gh">${t.assignee?'@'+t.assignee:'unassigned'}</span>
+                <span>
+                ${key!=='todo'?`<button class="btn btn-quiet" style="padding:2px 8px;font-size:.64rem" onclick="moveTask('${t.id}',-1)" aria-label="move left">&larr;</button>`:''}
+                ${key!=='done'?`<button class="btn btn-quiet" style="padding:2px 8px;font-size:.64rem" onclick="moveTask('${t.id}',1)" aria-label="move right">&rarr;</button>`:''}
+                </span>
+              </div>
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>
+    <p class="gh" style="margin-top:14px">Tasks moved to Done with an assignee are logged as contributions — design and docs count, not just commits.</p>`;
+  } else if(dashTab==='chat'){
+    body = `<div class="app-row" style="margin-bottom:18px">
+        <div class="top"><span class="name">Start a thread</span><span class="gh">members only · async — live chat lives in your Discord link</span></div>
+        <textarea id="thread-body" placeholder="Decisions, questions, context — the stuff worth keeping on record." style="width:100%;min-height:60px;font-family:var(--sans);font-size:.88rem;padding:10px 12px;border:1.5px solid var(--paper-edge);border-radius:6px;background:var(--paper);resize:vertical;color:var(--ink)"></textarea>
+        <div class="actions" style="margin-top:10px"><button class="btn btn-red" onclick="postThread()">Post thread</button></div>
+      </div>`
+      + threads.map(th=>`<div class="app-row" style="margin-bottom:12px">
+          <div class="top"><span class="avatar">${th.author[0].toUpperCase()}</span><span class="name" style="font-size:.86rem">@${th.author}</span><span class="gh">${th.when}</span></div>
+          <p style="font-size:.88rem;color:#473a2e;margin-bottom:${th.replies.length?'10px':'0'}">${th.body}</p>
+          ${th.replies.map(r=>`<div style="border-left:3px solid var(--paper-edge);padding:6px 12px;margin-left:10px;margin-bottom:6px">
+            <span class="gh">@${r.author} · ${r.when}</span>
+            <p style="font-size:.84rem;color:#473a2e">${r.body}</p></div>`).join('')}
+          <div class="actions" style="margin-top:8px"><button class="btn btn-quiet" style="padding:4px 12px;font-size:.7rem" onclick="replyThread('${th.id}')">Reply</button></div>
+        </div>`).join('');
+  } else {
+    body = p.needs.map(n=>`<div class="need"><div><div class="t">${n.title}</div><div class="d">${n.detail}</div></div><button class="btn btn-quiet" onclick="toast('Role closed (mock)')">Close role</button></div>`).join('')
+      + `<button class="btn btn-red" style="margin-top:6px" onclick="toast('New role form would open here')">+ Add a role</button>`;
+  }
+  return `
+    <h1>promptpit <span class="stage prototype" style="font-size:.6rem">prototype</span></h1>
+    <p class="sub">github.com/jq-dev/promptpit · your project dashboard</p>
+    <div class="panel">
+      <div class="tabs">
+        <button class="${dashTab==='apps'?'active':''}" onclick="setDashTab('apps')">Applications${pending?`<span class="count">${pending}</span>`:''}</button>
+        <button class="${dashTab==='tasks'?'active':''}" onclick="setDashTab('tasks')">Tasks</button>
+        <button class="${dashTab==='chat'?'active':''}" onclick="setDashTab('chat')">Discussion</button>
+        <button class="${dashTab==='announce'?'active':''}" onclick="setDashTab('announce')">Announcements</button>
+        <button class="${dashTab==='team'?'active':''}" onclick="setDashTab('team')">Team</button>
+        <button class="${dashTab==='activity'?'active':''}" onclick="setDashTab('activity')">Activity</button>
+        <button class="${dashTab==='roles'?'active':''}" onclick="setDashTab('roles')">Open roles</button>
+      </div>
+      ${body}
+    </div>`;
+}
+function setDashTab(t){ dashTab=t; render(); }
+
+// ---------- kanban + discussion actions ----------
+const COLS = ['todo','doing','done'];
+let draggedTaskId = null;
+function dragTask(e, id){ draggedTaskId = id; e.dataTransfer.effectAllowed='move'; }
+function dropTask(e, status){
+  e.preventDefault();
+  if(!draggedTaskId) return;
+  setTaskStatus(draggedTaskId, status);
+  draggedTaskId = null;
+}
+function moveTask(id, dir){
+  const t = tasks.find(x=>x.id===id);
+  const next = COLS[COLS.indexOf(t.status)+dir];
+  if(next) setTaskStatus(id, next);
+}
+function setTaskStatus(id, status){
+  const t = tasks.find(x=>x.id===id);
+  const wasDone = t.status==='done';
+  t.status = status;
+  render();
+  if(status==='done' && !wasDone && t.assignee) toast('Done — logged as a contribution for @'+t.assignee);
+}
+function addTask(){
+  const input = document.getElementById('new-task');
+  const title = input.value.trim();
+  if(!title){ toast('Give the task a title'); return; }
+  tasks.unshift({id:'t'+Date.now(), title, status:'todo', assignee:null});
+  render();
+  const again = document.getElementById('new-task'); if(again) again.focus();
+}
+function postThread(){
+  const el = document.getElementById('thread-body');
+  const bodyText = el.value.trim();
+  if(!bodyText){ toast('Write something first'); return; }
+  threads.unshift({id:'th'+Date.now(), author:me.login, when:'just now', body:bodyText, replies:[]});
+  render(); toast('Thread posted — members notified');
+}
+function replyThread(id){
+  const reply = window.prompt('Reply:');
+  if(!reply || !reply.trim()) return;
+  const th = threads.find(x=>x.id===id);
+  th.replies.push({author:me.login, when:'just now', body:reply.trim()});
+  render();
+}
+
+// ---------- mod queue view ----------
+function modView(){
+  const colors = {clean:'var(--pin-teal)', borderline:'var(--pin-gold)', spam:'var(--pin-red)'};
+  return `
+    <h1>Moderation queue</h1>
+    <p class="sub">LLM triage runs on every new pitch, application, and announcement. The model flags — a human always makes the final call.</p>
+    <div class="panel">
+      ${modQueue.map(m=>`<div class="app-row">
+        <div class="top">
+          <span class="status-pill" style="background:${colors[m.verdict]};color:${m.verdict==='borderline'?'var(--ink)':'#fff'}">${m.verdict} · ${Math.round(m.confidence*100)}%</span>
+          <span class="name" style="font-size:.9rem">${m.subject}</span>
+          ${m.decided?`<span class="gh" style="margin-left:auto">${m.decided}</span>`:''}
+        </div>
+        <p class="pitch" style="border-left-color:${colors[m.verdict]}">${m.reasons}</p>
+        ${!m.decided?`<div class="actions">
+          <button class="btn btn-teal" onclick="modDecide('${m.id}','approved')">Approve</button>
+          <button class="btn btn-quiet" onclick="modDecide('${m.id}','removed')">Remove content</button>
+        </div>`:''}
+      </div>`).join('')}
+      <p class="gh" style="margin-top:6px">Every verdict is logged — audit the model's accuracy over time and tune the prompt.</p>
+    </div>`;
+}
+function modDecide(id, decision){
+  const m = modQueue.find(x=>x.id===id); m.decided = decision;
+  render(); toast(decision==='approved' ? 'Approved — content stays up' : 'Removed — author notified');
+}
+function postAnnouncement(){
+  const title = document.getElementById('ann-title').value.trim();
+  const bodyText = document.getElementById('ann-body').value.trim();
+  if(!title || !bodyText){ toast('Title and body both needed'); return; }
+  announcements.unshift({id:'an'+Date.now(), projectId:'p3', author:me.login, when:'just now', kind:'update', title, body:bodyText});
+  render(); toast('Posted — LLM triage: clean · published to the global feed');
+}
+function reportContent(subject){
+  modQueue.unshift({id:'m'+Date.now(), subject, verdict:'borderline', confidence:.5,
+    reasons:'User report — escalated to the top of the queue for human review.', decided:null});
+  toast('Reported — queued for review');
+}
+
+// ---------- actions ----------
+function openApply(pid, nid){
+  const p = projects.find(x=>x.id===pid);
+  const n = p.needs.find(x=>x.id===nid);
+  applyTarget = {pid, nid};
+  document.getElementById('modal-for').textContent = `${n.title} · ${p.title}`;
+  document.getElementById('pitch').value='';
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('pitch').focus();
+}
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+function submitApplication(){
+  const pitch = document.getElementById('pitch').value.trim();
+  if(!pitch){ toast('Add a short pitch first'); return; }
+  myApplications.push({needId:applyTarget.nid, pitch});
+  closeModal(); render();
+  toast('Application sent — your GitHub profile went with it');
+}
+function removeMemberMock(){
+  toast('Member removal logged — repo access revoked (mock)');
+}
+function decide(id, status){
+  const a = inbox.find(x=>x.id===id); a.status = status;
+  render();
+  toast(status==='accepted' ? `@${a.login} accepted — GitHub repo invite sent (mock)` : `@${a.login} declined`);
+}
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+document.getElementById('overlay').addEventListener('click', e=>{ if(e.target.id==='overlay') closeModal(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
+render();
+</script>
+</body>
+</html>
