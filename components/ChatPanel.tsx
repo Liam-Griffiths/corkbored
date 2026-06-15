@@ -37,6 +37,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const sinceRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const applyPayload = useCallback((data: { messages: ChatMessage[]; members: Member[] }, initial = false) => {
     if (initial) {
@@ -87,22 +88,46 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   // WebSocket transport — connects to Go backend when CHAT_TRANSPORT=websocket
   useEffect(() => {
     if (transport !== "websocket" || !wsUrl) return;
-    // TODO: connect to Go backend WebSocket
-    // Expected protocol: server pushes { messages, members } JSON frames on connect and on change.
-    // const ws = new WebSocket(`${wsUrl}/projects/${slug}/chat?token=<jwt>`);
-    // ws.onmessage = (e) => applyPayload(JSON.parse(e.data));
-    // return () => ws.close();
-    //
-    // For now fall back to polling so the flag can be toggled without breaking the UI:
-    fetchMessages(true);
-    pingPresence();
-    const msgInterval = setInterval(() => fetchMessages(false), 4000);
-    const presenceInterval = setInterval(pingPresence, 30_000);
+
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout>;
+
+    async function connect() {
+      try {
+        const res = await fetch(`/api/chat-token?project=${encodeURIComponent(slug)}`);
+        if (!res.ok) return;
+        const { token } = await res.json();
+
+        const url = `${wsUrl}/ws/projects/${encodeURIComponent(slug)}?token=${encodeURIComponent(token)}`;
+        ws = new WebSocket(url);
+        wsRef.current = ws;
+
+        ws.onmessage = (e) => {
+          try {
+            const frame = JSON.parse(e.data);
+            if (frame.type === "init") {
+              applyPayload({ messages: frame.messages ?? [], members: frame.members ?? [] }, true);
+            } else if (frame.type === "message" && frame.message) {
+              setMessages((prev) => [...prev, frame.message]);
+            } else if (frame.type === "presence") {
+              setMembers(frame.members ?? []);
+            }
+          } catch { /* malformed frame */ }
+        };
+
+        ws.onclose = () => {
+          // Reconnect after 3s on unexpected close
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch { /* fetch error — retry */ }
+    }
+
+    connect();
     return () => {
-      clearInterval(msgInterval);
-      clearInterval(presenceInterval);
+      ws?.close();
+      clearTimeout(reconnectTimeout);
     };
-  }, [transport, wsUrl, slug, fetchMessages, pingPresence, applyPayload]);
+  }, [transport, wsUrl, slug, applyPayload]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -114,16 +139,21 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
     if (!body || sending) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/projects/${slug}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      });
-      if (res.ok) {
-        const msg = await res.json();
-        setMessages((prev) => [...prev, msg]);
-        sinceRef.current = msg.createdAt;
+      if (transport === "websocket" && wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "message", body }));
         setDraft("");
+      } else {
+        const res = await fetch(`/api/projects/${slug}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body }),
+        });
+        if (res.ok) {
+          const msg = await res.json();
+          setMessages((prev) => [...prev, msg]);
+          sinceRef.current = msg.createdAt;
+          setDraft("");
+        }
       }
     } finally {
       setSending(false);
