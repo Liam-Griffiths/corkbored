@@ -27,7 +27,7 @@ export default async function ChatPage({ params }: { params: Promise<{ slug: str
   if (!membership || membership.leftAt) redirect(`/p/${slug}`);
 
   return (
-    <div className="h-[calc(100vh-65px)] flex flex-col">
+    <div className="h-[calc(100vh-290px)] min-h-[480px]">
       <ChatPanel
         slug={slug}
         currentUserId={session.user.id}

@@ -67,7 +67,7 @@ export default async function RolesPage({ params }: { params: Promise<{ slug: st
   };
 
   return (
-    <div className="max-w-2xl px-8 py-8">
+    <div className="mx-auto max-w-2xl">
       <h1 className="font-display font-bold text-xl text-ink mb-6">Roles</h1>
 
       <div className="space-y-3 mb-8">

@@ -3,7 +3,11 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
-import { ProjectNav } from "@/components/ProjectNav";
+import { ProjectTabs } from "@/components/ProjectTabs";
+import { FollowButton } from "@/components/FollowButton";
+import { ShareButtons } from "@/components/ShareButtons";
+import { LinkedText } from "@/components/SafeLink";
+import { getOrCreateProjectShortlink } from "@/lib/shortlink";
 
 const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
 
@@ -25,7 +29,17 @@ export default async function ProjectLayout({
   const [project, session] = await Promise.all([
     prisma.project.findUnique({
       where: { slug },
-      select: { id: true, slug: true, title: true, stage: true, moderationStatus: true, repoFullName: true },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        stage: true,
+        pitch: true,
+        moderationStatus: true,
+        repoFullName: true,
+        tags: true,
+        _count: { select: { projectFollows: true } },
+      },
     }),
     auth(),
   ]);
@@ -42,61 +56,101 @@ export default async function ProjectLayout({
     : null;
 
   const memberRole = membership && !membership.leftAt ? (membership.role as string) : null;
-  const isOwnerOrMaintainer = memberRole === "owner" || memberRole === "maintainer";
+  const isManager = memberRole === "owner" || memberRole === "maintainer";
+  const isOwner = memberRole === "owner";
 
-  const pendingCount = isOwnerOrMaintainer
-    ? await prisma.application.count({
-        where: { role: { projectId: project.id }, status: "pending" },
-      })
-    : 0;
+  const [pendingCount, isFollowing, shortCode] = await Promise.all([
+    isManager
+      ? prisma.application.count({ where: { role: { projectId: project.id }, status: "pending" } })
+      : Promise.resolve(0),
+    userId && !isOwner
+      ? prisma.projectFollow
+          .findUnique({ where: { userId_projectId: { userId, projectId: project.id } } })
+          .then((f) => !!f)
+      : Promise.resolve(false),
+    getOrCreateProjectShortlink(project.id),
+  ]);
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://corkbored.com";
 
   return (
     <>
       <Header />
-      <div className="flex min-h-[calc(100vh-65px)]">
-        {/* Sidebar */}
-        <aside className="w-52 flex-shrink-0 border-r border-paper-edge bg-paper flex flex-col sticky top-[65px] h-[calc(100vh-65px)]">
-          {/* Project identity */}
-          <div className="border-b border-paper-edge px-4 py-4">
-            <Link href={`/p/${slug}`}>
-              <p className="font-display font-semibold text-sm text-ink leading-snug line-clamp-2 hover:text-pin-red transition-colors">
-                {project.title}
-              </p>
-            </Link>
-            <div className="mt-1.5 flex items-center gap-2">
-              <span className={`rounded-sm px-1.5 py-0.5 font-mono text-[0.58rem] uppercase tracking-wide ${STAGE_COLORS[project.stage]}`}>
-                {project.stage}
-              </span>
+      <div className="mx-auto max-w-5xl px-5">
+        {/* Masthead */}
+        <div className="pt-8 pb-5">
+          <Link
+            href="/board"
+            className="mb-4 inline-block font-mono text-[0.78rem] text-ink-soft hover:text-ink"
+          >
+            ← back to the board
+          </Link>
+
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span
+                  className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full bg-pin-red shadow-[inset_-2px_-2px_3px_rgba(0,0,0,.35)]"
+                  aria-hidden="true"
+                />
+                <h1 className="font-display text-2xl font-extrabold tracking-tight text-ink">
+                  {project.title}
+                </h1>
+                <span
+                  className={`rounded-sm px-2 py-0.5 align-middle font-mono text-[0.6rem] uppercase tracking-wide ${STAGE_COLORS[project.stage] ?? ""}`}
+                >
+                  {project.stage}
+                </span>
+              </div>
               <a
                 href={`https://github.com/${project.repoFullName}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-[0.6rem] text-ink-soft hover:text-ink truncate"
+                className="mt-1.5 inline-block font-mono text-[0.78rem] text-ink-soft hover:text-ink"
               >
-                {project.repoFullName}
+                github.com/{project.repoFullName}
               </a>
+            </div>
+
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+              <ShareButtons shortUrl={`${appUrl}/${shortCode}`} title={project.title} />
+              {userId && !isOwner && (
+                <FollowButton
+                  endpoint={`/api/projects/${slug}/follow`}
+                  initialFollowing={isFollowing}
+                  initialCount={project._count.projectFollows}
+                />
+              )}
             </div>
           </div>
 
-          <ProjectNav
-            slug={slug}
-            memberRole={memberRole}
-            pendingCount={pendingCount}
-            chatEnabled={CHAT_ENABLED}
-          />
+          {project.pitch && (
+            <p className="mt-3 max-w-2xl text-[0.98rem] leading-relaxed text-ink/85">
+              <LinkedText text={project.pitch} />
+            </p>
+          )}
 
-          {/* Footer */}
-          <div className="border-t border-paper-edge px-4 py-3">
-            <Link href="/board" className="font-mono text-[0.68rem] text-ink-soft hover:text-ink transition-colors">
-              ← board
-            </Link>
-          </div>
-        </aside>
+          {project.tags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {project.tags.map((t) => (
+                <span key={t.tag} className="rounded-sm bg-paper-edge px-2 py-0.5 font-mono text-[0.68rem] text-ink-soft">
+                  {t.tag}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Main content */}
-        <main className="flex-1 min-w-0">
-          {children}
-        </main>
+        {/* Tab navigation */}
+        <ProjectTabs
+          slug={slug}
+          memberRole={memberRole}
+          pendingCount={pendingCount}
+          chatEnabled={CHAT_ENABLED}
+        />
+
+        {/* Section content */}
+        <div className="py-8">{children}</div>
       </div>
     </>
   );

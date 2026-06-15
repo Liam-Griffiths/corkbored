@@ -36,7 +36,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ slug:
   });
 
   return (
-    <div className="max-w-2xl px-8 py-8">
+    <div className="mx-auto max-w-2xl">
       <h1 className="font-display font-bold text-xl text-ink mb-6">Activity</h1>
 
       {contributions.length === 0 ? (

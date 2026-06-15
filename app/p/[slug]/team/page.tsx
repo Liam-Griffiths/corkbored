@@ -37,7 +37,7 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
   }
 
   return (
-    <div className="max-w-2xl px-8 py-8">
+    <div className="mx-auto max-w-2xl">
       <h1 className="font-display font-bold text-xl text-ink mb-1">Team</h1>
       <p className="font-mono text-sm text-ink-soft mb-6">{memberships.length} member{memberships.length !== 1 ? "s" : ""}</p>
 

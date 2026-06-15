@@ -4,96 +4,171 @@ import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { LinkedText } from "@/components/SafeLink";
-import { FollowButton } from "@/components/FollowButton";
-import { ShareButtons } from "@/components/ShareButtons";
-import { getOrCreateProjectShortlink } from "@/lib/shortlink";
+import { ChatPanel } from "@/components/ChatPanel";
 
-async function getProject(slug: string) {
-  return prisma.project.findUnique({
-    where: { slug },
-    include: {
-      tags: true,
-      roles: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
-      memberships: {
-        where: { leftAt: null },
-        orderBy: { joinedAt: "asc" },
-        include: { user: { select: { id: true, displayName: true, githubLogin: true, avatarUrl: true } } },
-      },
-      announcements: {
-        where: { moderationStatus: "published", publishedAt: { not: null } },
-        orderBy: { publishedAt: "desc" },
-        take: 3,
-      },
-      _count: { select: { projectFollows: true } },
-    },
-  });
-}
+const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
+const CHAT_TRANSPORT = (process.env.CHAT_TRANSPORT ?? "polling") as "polling" | "websocket";
+const CHAT_WS_URL = process.env.CHAT_WS_URL ?? null;
+
+const KIND_LABELS: Record<string, string> = {
+  update: "update", release: "release", roles_open: "roles open", milestone: "milestone",
+};
+
+const EVENT_LABELS: Record<string, string> = {
+  commit: "pushed a commit",
+  pr_merged: "merged a PR",
+  release: "published a release",
+  manual: "completed a task",
+};
 
 export default async function ProjectOverviewPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [project, session] = await Promise.all([getProject(slug), auth()]);
+  const [project, session] = await Promise.all([
+    prisma.project.findUnique({
+      where: { slug },
+      include: {
+        roles: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
+        memberships: {
+          where: { leftAt: null },
+          orderBy: { joinedAt: "asc" },
+          include: { user: { select: { id: true, displayName: true, githubLogin: true, avatarUrl: true } } },
+        },
+        announcements: {
+          where: { moderationStatus: "published", publishedAt: { not: null } },
+          orderBy: { publishedAt: "desc" },
+          take: 4,
+        },
+        _count: { select: { projectFollows: true } },
+      },
+    }),
+    auth(),
+  ]);
 
   if (!project || project.moderationStatus === "removed") notFound();
 
   const userId = session?.user?.id;
-  const membership = userId
-    ? project.memberships.find((m) => m.userId === userId)
-    : null;
+  const membership = userId ? project.memberships.find((m) => m.userId === userId) : null;
   const isMember = !!membership;
   const isOwner = membership?.role === "owner";
 
-  const [isFollowing, shortCode] = await Promise.all([
-    userId && !isOwner
-      ? prisma.projectFollow.findUnique({
-          where: { userId_projectId: { userId, projectId: project.id } },
-        }).then((f) => !!f)
-      : Promise.resolve(false),
-    getOrCreateProjectShortlink(project.id),
-  ]);
+  // ── Member mission control: chat + who's online + activity ──────────────────
+  if (isMember && userId) {
+    const activity = await prisma.contributionEvent.findMany({
+      where: { projectId: project.id },
+      orderBy: { occurredAt: "desc" },
+      take: 8,
+      include: { user: { select: { displayName: true, githubLogin: true } } },
+    });
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://corkbored.com";
-  const KIND_LABELS: Record<string, string> = {
-    update: "update", release: "release", roles_open: "roles open", milestone: "milestone",
-  };
-
-  return (
-    <div className="max-w-3xl px-8 py-8">
-      {/* Header */}
-      <div className="mb-6 flex flex-wrap items-start gap-4">
-        <div className="flex-1 min-w-0">
-          {project.pitch ? (
-            <p className="text-[1.05rem] text-ink/85 leading-relaxed max-w-2xl">
-              <LinkedText text={project.pitch} />
-            </p>
+    return (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        {/* Team chat — includes its own who's-online rail */}
+        <section className="min-w-0">
+          <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-ink-soft">Team chat</h2>
+          {CHAT_ENABLED ? (
+            <div className="h-[560px]">
+              <ChatPanel
+                slug={slug}
+                currentUserId={userId}
+                transport={CHAT_TRANSPORT}
+                wsUrl={CHAT_WS_URL}
+                fullHeight
+              />
+            </div>
           ) : (
-            <p className="text-sm text-ink-soft italic">No pitch yet.</p>
+            <div className="rounded-sm border border-dashed border-paper-edge bg-paper p-8 text-center">
+              <p className="font-mono text-sm text-ink-soft">Live chat is off for now.</p>
+              <Link href={`/p/${slug}/discussion`} className="mt-2 inline-block font-mono text-xs text-pin-teal hover:underline">
+                Open the discussion board →
+              </Link>
+            </div>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-          <ShareButtons shortUrl={`${appUrl}/${shortCode}`} title={project.title} />
-          {userId && !isOwner && (
-            <FollowButton
-              endpoint={`/api/projects/${slug}/follow`}
-              initialFollowing={isFollowing}
-              initialCount={project._count.projectFollows}
-            />
+        </section>
+
+        {/* Side column: pulse + activity + announcements */}
+        <aside className="space-y-6">
+          {/* Pulse */}
+          <div className="rounded-sm bg-paper p-4 shadow-[0_6px_16px_rgba(0,0,0,.12)]">
+            <p className="mb-3 font-mono text-[0.62rem] uppercase tracking-widest text-ink-soft">Pulse</p>
+            <div className="flex justify-between gap-2 text-center">
+              <Link href={`/p/${slug}/team`} className="flex-1 group">
+                <p className="font-mono text-xl font-bold text-ink">{project.memberships.length}</p>
+                <p className="font-mono text-[0.6rem] uppercase tracking-wide text-ink-soft group-hover:text-ink">team</p>
+              </Link>
+              <div className="flex-1">
+                <p className="font-mono text-xl font-bold text-ink">{project._count.projectFollows}</p>
+                <p className="font-mono text-[0.6rem] uppercase tracking-wide text-ink-soft">followers</p>
+              </div>
+              <Link href={`/p/${slug}/roles`} className="flex-1 group">
+                <p className={`font-mono text-xl font-bold ${project.roles.length > 0 ? "text-pin-red" : "text-ink"}`}>
+                  {project.roles.length}
+                </p>
+                <p className="font-mono text-[0.6rem] uppercase tracking-wide text-ink-soft group-hover:text-ink">open roles</p>
+              </Link>
+            </div>
+          </div>
+
+          {/* Activity */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="font-mono text-[0.62rem] uppercase tracking-widest text-ink-soft">Recent activity</p>
+              <Link href={`/p/${slug}/activity`} className="font-mono text-[0.62rem] text-ink-soft hover:text-ink">all →</Link>
+            </div>
+            {activity.length === 0 ? (
+              <p className="rounded-sm border border-dashed border-paper-edge p-4 text-center font-mono text-xs text-ink-soft">
+                Quiet so far. Activity shows up once your GitHub webhook fires.
+              </p>
+            ) : (
+              <ul className="space-y-2.5">
+                {activity.map((ev) => {
+                  const meta = ev.metadata as Record<string, unknown> | null;
+                  return (
+                    <li key={ev.id} className="flex gap-2 text-xs">
+                      <span className="mt-0.5 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-pin-gold text-[0.6rem] font-semibold text-ink">
+                        {(ev.user?.displayName ?? ev.user?.githubLogin ?? "?")[0].toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-ink/85">
+                          <span className="font-medium text-ink">{ev.user?.displayName ?? ev.user?.githubLogin}</span>{" "}
+                          <span className="text-ink-soft">{EVENT_LABELS[ev.kind] ?? ev.kind}</span>
+                        </p>
+                        {!!meta?.message && <p className="truncate font-mono text-[0.68rem] text-ink-soft">{String(meta.message)}</p>}
+                        <p className="font-mono text-[0.6rem] text-ink-soft/60">{new Date(ev.occurredAt).toLocaleDateString()}</p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* Latest announcements */}
+          {project.announcements.length > 0 && (
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-mono text-[0.62rem] uppercase tracking-widest text-ink-soft">Announcements</p>
+                <Link href={`/p/${slug}/announcements`} className="font-mono text-[0.62rem] text-ink-soft hover:text-ink">all →</Link>
+              </div>
+              <div className="space-y-2">
+                {project.announcements.slice(0, 2).map((a) => (
+                  <div key={a.id} className="rounded-sm border border-paper-edge bg-paper p-3">
+                    <p className="text-sm font-semibold text-ink">{a.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-ink/70"><LinkedText text={a.body} /></p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
+        </aside>
       </div>
+    );
+  }
 
-      {/* Tags */}
-      {project.tags.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-1.5">
-          {project.tags.map((t) => (
-            <span key={t.tag} className="rounded-sm bg-paper-edge px-2 py-0.5 font-mono text-xs text-ink-soft">
-              {t.tag}
-            </span>
-          ))}
-        </div>
-      )}
-
+  // ── Public face: roles + team + announcements ───────────────────────────────
+  return (
+    <div className="space-y-8">
       {/* Stats */}
-      <div className="mb-8 flex flex-wrap gap-6 border-b border-paper-edge pb-6">
+      <div className="flex flex-wrap gap-8 border-b border-paper-edge pb-6">
         <div>
           <p className="font-mono text-2xl font-bold text-ink">{project.memberships.length}</p>
           <p className="font-mono text-[0.68rem] uppercase tracking-widest text-ink-soft">members</p>
@@ -113,7 +188,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.4fr_1fr]">
         {/* Open roles */}
         <section>
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="font-mono text-xs uppercase tracking-widest text-ink-soft">Open roles</h2>
             <Link href={`/p/${slug}/roles`} className="font-mono text-[0.68rem] text-ink-soft hover:text-ink">all →</Link>
           </div>
@@ -126,11 +201,11 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
               {project.roles.slice(0, 4).map((role) => (
                 <div key={role.id} className="flex items-center justify-between gap-3 rounded-lg border border-paper-edge bg-paper p-3.5">
                   <div className="min-w-0">
-                    <p className="font-medium text-sm text-ink truncate">{role.title}</p>
-                    {role.detail && <p className="text-xs text-ink-soft truncate">{role.detail}</p>}
+                    <p className="truncate text-sm font-medium text-ink">{role.title}</p>
+                    {role.detail && <p className="truncate text-xs text-ink-soft">{role.detail}</p>}
                   </div>
                   {isOwner ? (
-                    <span className="font-mono text-xs text-ink-soft flex-shrink-0">your project</span>
+                    <span className="flex-shrink-0 font-mono text-xs text-ink-soft">your project</span>
                   ) : userId ? (
                     <Link
                       href={`/p/${slug}/apply/${role.id}`}
@@ -154,7 +229,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
 
         {/* Team */}
         <section>
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="font-mono text-xs uppercase tracking-widest text-ink-soft">Team</h2>
             <Link href={`/p/${slug}/team`} className="font-mono text-[0.68rem] text-ink-soft hover:text-ink">all →</Link>
           </div>
@@ -179,17 +254,17 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
                       {name[0].toUpperCase()}
                     </span>
                   )}
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     {login ? (
-                      <Link href={`/u/${login}`} className="font-medium text-sm text-ink hover:underline truncate block">
+                      <Link href={`/u/${login}`} className="block truncate text-sm font-medium text-ink hover:underline">
                         {name}
                       </Link>
                     ) : (
-                      <p className="font-medium text-sm text-ink truncate">{name}</p>
+                      <p className="truncate text-sm font-medium text-ink">{name}</p>
                     )}
                   </div>
                   {(m.role as string) === "owner" && (
-                    <span className="rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.58rem] text-paper flex-shrink-0">owner</span>
+                    <span className="flex-shrink-0 rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.58rem] text-paper">owner</span>
                   )}
                 </div>
               );
@@ -205,43 +280,25 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
 
       {/* Recent announcements */}
       {project.announcements.length > 0 && (
-        <section className="mt-8 pt-8 border-t border-paper-edge">
-          <div className="flex items-center justify-between mb-3">
+        <section className="border-t border-paper-edge pt-8">
+          <div className="mb-3 flex items-center justify-between">
             <h2 className="font-mono text-xs uppercase tracking-widest text-ink-soft">Latest announcements</h2>
             <Link href={`/p/${slug}/announcements`} className="font-mono text-[0.68rem] text-ink-soft hover:text-ink">all →</Link>
           </div>
           <div className="space-y-3">
-            {project.announcements.map((a) => (
+            {project.announcements.slice(0, 3).map((a) => (
               <div key={a.id} className="rounded-lg border border-paper-edge bg-paper p-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-sm text-ink">{a.title}</span>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-ink">{a.title}</span>
                   <span className="rounded-full bg-paper-edge px-2 py-0.5 font-mono text-[0.6rem] text-ink-soft">
                     {KIND_LABELS[a.kind] ?? a.kind}
                   </span>
                 </div>
-                <p className="text-sm text-ink/75 line-clamp-2"><LinkedText text={a.body} /></p>
+                <p className="line-clamp-2 text-sm text-ink/75"><LinkedText text={a.body} /></p>
               </div>
             ))}
           </div>
         </section>
-      )}
-
-      {/* Member quick-links */}
-      {isMember && (
-        <div className="mt-8 pt-6 border-t border-paper-edge">
-          <p className="font-mono text-[0.65rem] uppercase tracking-widest text-ink-soft mb-3">Quick links</p>
-          <div className="flex flex-wrap gap-2">
-            <Link href={`/p/${slug}/tasks`} className="rounded-md border border-paper-edge px-3 py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink">
-              ✓ Tasks
-            </Link>
-            <Link href={`/p/${slug}/discussion`} className="rounded-md border border-paper-edge px-3 py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink">
-              💬 Discussion
-            </Link>
-            <Link href={`/p/${slug}/chat`} className="rounded-md border border-pin-teal/30 px-3 py-1.5 font-mono text-xs text-pin-teal hover:border-pin-teal">
-              ⚡ Team chat
-            </Link>
-          </div>
-        </div>
       )}
     </div>
   );

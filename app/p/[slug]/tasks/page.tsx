@@ -39,7 +39,7 @@ export default async function TasksPage({ params }: { params: Promise<{ slug: st
   const members = memberships.map((m) => m.user).filter((u): u is NonNullable<typeof u> => u != null);
 
   return (
-    <div className="px-8 py-8">
+    <div>
       <h1 className="font-display font-bold text-xl text-ink mb-6">Tasks</h1>
       <KanbanBoard
         initialTasks={tasks.map((t) => ({
