@@ -159,6 +159,7 @@ model User {
   moderationDecisions   ModerationItem[]
   assignedTasks         Task[]
   authoredAnnouncements Announcement[]   @relation("AnnouncementAuthor")
+  authoredMessages      Message[]        @relation("MessageAuthor")
   contributions         ContributionEvent[]
 }
 
@@ -315,6 +316,7 @@ model Message {
   createdAt DateTime  @default(now())
 
   project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author  User      @relation("MessageAuthor", fields: [authorId], references: [id])
   parent  Message?  @relation("ThreadReplies", fields: [parentId], references: [id])
   replies Message[] @relation("ThreadReplies")
 

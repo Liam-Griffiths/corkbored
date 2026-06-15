@@ -3,6 +3,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
+import { KanbanBoard } from "@/components/KanbanBoard";
+import { DiscussionThread } from "@/components/DiscussionThread";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -28,7 +30,7 @@ async function getProject(slug: string) {
   });
   if (!project) return null;
 
-  const [applications, announcements, contributions] = await Promise.all([
+  const [applications, announcements, contributions, tasks, messages] = await Promise.all([
     prisma.application.findMany({
       where: { role: { projectId: project.id } },
       orderBy: { createdAt: "desc" },
@@ -49,9 +51,26 @@ async function getProject(slug: string) {
       take: 50,
       include: { user: { select: { displayName: true, githubLogin: true } } },
     }),
+    prisma.task.findMany({
+      where: { projectId: project.id },
+      orderBy: { position: "asc" },
+      include: { assignee: { select: { id: true, displayName: true, githubLogin: true } } },
+    }),
+    prisma.message.findMany({
+      where: { projectId: project.id, parentId: null, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+      include: {
+        author: { select: { id: true, displayName: true, githubLogin: true } },
+        replies: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "asc" },
+          include: { author: { select: { id: true, displayName: true, githubLogin: true } } },
+        },
+      },
+    }),
   ]);
 
-  return { ...project, applications, announcements, contributions };
+  return { ...project, applications, announcements, contributions, tasks, messages };
 }
 
 type Project = NonNullable<Awaited<ReturnType<typeof getProject>>>;
@@ -134,8 +153,25 @@ export default async function DashboardPage({ params, searchParams }: Props) {
             <AnnouncementsTab project={project} slug={slug} />
           )}
           {tab === "activity" && <ActivityTab project={project} />}
-          {(tab === "tasks" || tab === "discussion") && (
-            <ComingSoon tab={tab} />
+          {tab === "tasks" && (
+            <KanbanBoard
+              initialTasks={project.tasks.map((t) => ({
+                ...t,
+                status: t.status as "todo" | "doing" | "done",
+                assignee: t.assignee,
+              }))}
+              members={project.memberships
+                .map((m) => m.user)
+                .filter((u): u is NonNullable<typeof u> => u != null)}
+              projectSlug={slug}
+            />
+          )}
+          {tab === "discussion" && (
+            <DiscussionThread
+              initialMessages={project.messages as Parameters<typeof DiscussionThread>[0]["initialMessages"]}
+              currentUserId={session.user.id}
+              projectSlug={slug}
+            />
           )}
         </div>
       </main>
@@ -551,9 +587,7 @@ function ActivityTab({ project }: { project: Project }) {
 
 // ── Coming soon ───────────────────────────────────────────────────────────────
 
-const TAB_PHASES: Record<string, string> = {
-  tasks: "Phase 8", discussion: "Phase 8",
-};
+const TAB_PHASES: Record<string, string> = {};
 
 function ComingSoon({ tab }: { tab: string }) {
   return (
