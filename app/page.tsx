@@ -194,7 +194,7 @@ export default function LandingPage() {
           <section className="hero">
             <div className="wrap">
               <div>
-                <p className="kicker">For developers done shipping alone</p>
+                <p className="kicker">For developers done with working solo</p>
                 <h1>
                   Stop developing alone.<br />
                   <span className="mark">Pin your project.</span><br />
