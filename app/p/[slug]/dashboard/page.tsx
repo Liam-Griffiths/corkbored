@@ -5,14 +5,17 @@ import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DiscussionThread } from "@/components/DiscussionThread";
+import { ChatPanel } from "@/components/ChatPanel";
 import { LinkedText } from "@/components/SafeLink";
+
+const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
 
 interface Props {
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ tab?: string }>;
 }
 
-type Tab = "apps" | "team" | "roles" | "tasks" | "discussion" | "announcements" | "activity";
+type Tab = "apps" | "team" | "roles" | "tasks" | "discussion" | "announcements" | "activity" | "chat";
 
 async function getProject(slug: string) {
   const project = await prisma.project.findUnique({
@@ -102,6 +105,7 @@ export default async function DashboardPage({ params, searchParams }: Props) {
     { id: "discussion", label: "Discussion" },
     { id: "announcements", label: "Announcements" },
     { id: "activity", label: "Activity" },
+    ...(CHAT_ENABLED ? [{ id: "chat" as const, label: "💬 Chat" }] : []),
   ];
 
   return (
@@ -173,6 +177,9 @@ export default async function DashboardPage({ params, searchParams }: Props) {
               currentUserId={session.user.id}
               projectSlug={slug}
             />
+          )}
+          {tab === "chat" && CHAT_ENABLED && (
+            <ChatPanel slug={slug} currentUserId={session.user.id} />
           )}
         </div>
       </main>
