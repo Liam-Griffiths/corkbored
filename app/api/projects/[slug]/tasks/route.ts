@@ -30,7 +30,11 @@ export async function POST(
     const position = (last?.position ?? 0) + 1000;
 
     const task = await prisma.task.create({
-      data: { projectId: project.id, title: body.title, position },
+      data: { projectId: project.id, title: body.title, position, createdById: user.id },
+      include: {
+        assignee: { select: { id: true, displayName: true, githubLogin: true } },
+        createdBy: { select: { id: true, displayName: true, githubLogin: true } },
+      },
     });
 
     return Response.json(task, { status: 201 });

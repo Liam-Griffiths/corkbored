@@ -1,0 +1,6 @@
+ALTER TABLE "Task" ADD COLUMN "description"  TEXT;
+ALTER TABLE "Task" ADD COLUMN "createdById" TEXT;
+ALTER TABLE "Task" ADD COLUMN "tags"        JSONB;
+
+ALTER TABLE "Task" ADD CONSTRAINT "Task_createdById_fkey"
+  FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;

@@ -166,6 +166,7 @@ model User {
   removedMemberships    Membership[]     @relation("RemovedBy")
   moderationDecisions   ModerationItem[]
   assignedTasks         Task[]
+  createdTasks          Task[]           @relation("TaskCreator")
   authoredAnnouncements Announcement[]   @relation("AnnouncementAuthor")
   authoredMessages      Message[]        @relation("MessageAuthor")
   contributions         ContributionEvent[]
@@ -308,17 +309,21 @@ model ContributionEvent {
 }
 
 model Task {
-  id         String     @id @default(cuid())
-  projectId  String
-  title      String
-  status     TaskStatus @default(todo)
-  position   Float      @default(0)
-  assigneeId String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id          String     @id @default(cuid())
+  projectId   String
+  title       String
+  description String?    @db.Text
+  status      TaskStatus @default(todo)
+  position    Float      @default(0)
+  assigneeId  String?
+  createdById String?
+  tags        Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignee User?   @relation(fields: [assigneeId], references: [id])
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee  User?   @relation(fields: [assigneeId], references: [id])
+  createdBy User?   @relation("TaskCreator", fields: [createdById], references: [id])
 
   @@index([projectId, status, position])
 }

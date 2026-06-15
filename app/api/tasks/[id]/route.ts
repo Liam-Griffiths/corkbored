@@ -48,9 +48,15 @@ export async function PATCH(
         where: { id },
         data: {
           title: body.title,
+          description: body.description,
           status: body.status,
           assigneeId: body.assigneeId,
           position: body.position,
+          tags: body.tags,
+        },
+        include: {
+          assignee: { select: { id: true, displayName: true, githubLogin: true } },
+          createdBy: { select: { id: true, displayName: true, githubLogin: true } },
         },
       });
 
@@ -79,6 +85,30 @@ export async function PATCH(
     });
 
     return Response.json(updated);
+  } catch (e) {
+    return apiError(e);
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const user = await requireUser();
+
+    const task = await prisma.task.findUnique({
+      where: { id },
+      include: { project: { include: { memberships: { where: { leftAt: null } } } } },
+    });
+    if (!task) return Response.json({ error: "Not found" }, { status: 404 });
+
+    const isMember = task.project.memberships.some((m) => m.userId === user.id);
+    if (!isMember) throw new AuthError(403, "Members only");
+
+    await prisma.task.delete({ where: { id } });
+    return new Response(null, { status: 204 });
   } catch (e) {
     return apiError(e);
   }

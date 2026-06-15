@@ -60,7 +60,10 @@ async function getProject(slug: string) {
     prisma.task.findMany({
       where: { projectId: project.id },
       orderBy: { position: "asc" },
-      include: { assignee: { select: { id: true, displayName: true, githubLogin: true } } },
+      include: {
+        assignee: { select: { id: true, displayName: true, githubLogin: true } },
+        createdBy: { select: { id: true, displayName: true, githubLogin: true } },
+      },
     }),
     prisma.message.findMany({
       where: { projectId: project.id, parentId: null, deletedAt: null },
@@ -165,7 +168,7 @@ export default async function DashboardPage({ params, searchParams }: Props) {
               initialTasks={project.tasks.map((t) => ({
                 ...t,
                 status: t.status as "todo" | "doing" | "done",
-                assignee: t.assignee,
+                tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
               }))}
               members={project.memberships
                 .map((m) => m.user)
