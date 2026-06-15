@@ -49,15 +49,17 @@ async function getBoard(query: {
     include: { project: { select: { slug: true, title: true } } },
   });
 
+  const boostedQuery = BOOST_ENABLED
+    ? findProjects({
+        where: { ...where, boostedUntil: { gt: now } },
+        orderBy: { boostedUntil: "desc" },
+        take: 6,
+      })
+    : Promise.resolve([] as BoardProject[]);
+
   const nonBoostedWhere = BOOST_ENABLED
     ? { ...where, OR: [{ boostedUntil: null }, { boostedUntil: { lte: now } }] }
     : where;
-
-  const boostedQuery = findProjects({
-    where: { ...where, boostedUntil: { gt: now } },
-    orderBy: { boostedUntil: "desc" },
-    take: BOOST_ENABLED ? 6 : 0,
-  });
 
   if (sort === "trending") {
     const [boosted, rows, trendCounts, announcements] = await Promise.all([
