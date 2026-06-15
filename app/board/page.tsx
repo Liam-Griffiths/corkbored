@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { BoardQuerySchema } from "@/lib/validators";
 import { Header } from "@/components/Header";
+import { auth } from "@/lib/auth";
 
 interface Props {
   searchParams: Promise<Record<string, string>>;
@@ -119,7 +120,20 @@ function rotationClass(index: number) {
 
 export default async function BoardPage({ searchParams }: Props) {
   const params = BoardQuerySchema.parse(await searchParams);
+  const session = await auth();
   const { boosted, projects, announcements } = await getBoard(params);
+
+  const myProjects = session?.user?.id
+    ? await prisma.membership.findMany({
+        where: {
+          userId: session.user.id,
+          leftAt: null,
+          project: { moderationStatus: { not: "removed" } },
+        },
+        orderBy: { joinedAt: "desc" },
+        select: { role: true, project: { select: { slug: true, title: true } } },
+      })
+    : [];
 
   const allTags = [
     ...new Set(projects.flatMap((p) => p.tags.map((t) => t.tag))),
@@ -129,6 +143,38 @@ export default async function BoardPage({ searchParams }: Props) {
     <>
       <Header />
       <main className="mx-auto max-w-5xl px-5 pb-16">
+        {/* My projects — quick access */}
+        {myProjects.length > 0 && (
+          <section className="mt-8 mb-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="font-mono text-xs uppercase tracking-widest text-ink-soft">My projects</h2>
+              <Link href="/projects/new" className="font-mono text-[0.7rem] text-ink-soft hover:text-ink">
+                + pin a project
+              </Link>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto pb-2">
+              {myProjects.map((m) => (
+                <Link
+                  key={m.project.slug}
+                  href={`/p/${m.project.slug}`}
+                  className="group flex flex-shrink-0 items-center gap-2 rounded-lg border border-paper-edge bg-paper px-3.5 py-2 shadow-[0_2px_6px_rgba(0,0,0,.1)] transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-[0_6px_14px_rgba(0,0,0,.18)]"
+                >
+                  <span
+                    className={`h-2.5 w-2.5 flex-shrink-0 rounded-full shadow-[inset_-1px_-1px_2px_rgba(0,0,0,.35)] ${
+                      (m.role as string) === "owner" ? "bg-pin-red" : "bg-pin-teal"
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <span className="whitespace-nowrap text-sm font-medium text-ink">{m.project.title}</span>
+                  {(m.role as string) === "owner" && (
+                    <span className="rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.55rem] text-paper">owner</span>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Boosted projects */}
         {BOOST_ENABLED && boosted.length > 0 && (
           <section className="mt-8 mb-6">
