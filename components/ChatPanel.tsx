@@ -24,9 +24,11 @@ interface Member extends ChatUser {
 interface Props {
   slug: string;
   currentUserId: string;
+  transport: "polling" | "websocket";
+  wsUrl: string | null;
 }
 
-export function ChatPanel({ slug, currentUserId }: Props) {
+export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [draft, setDraft] = useState("");
@@ -36,6 +38,22 @@ export function ChatPanel({ slug, currentUserId }: Props) {
   const sinceRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const applyPayload = useCallback((data: { messages: ChatMessage[]; members: Member[] }, initial = false) => {
+    if (initial) {
+      setMessages(data.messages);
+      setMembers(data.members);
+      if (data.messages.length > 0) {
+        sinceRef.current = data.messages[data.messages.length - 1].createdAt;
+      }
+    } else {
+      if (data.messages.length > 0) {
+        setMessages((prev) => [...prev, ...data.messages]);
+        sinceRef.current = data.messages[data.messages.length - 1].createdAt;
+      }
+      setMembers(data.members);
+    }
+  }, []);
+
   const fetchMessages = useCallback(async (initial = false) => {
     try {
       const url = initial || !sinceRef.current
@@ -43,43 +61,48 @@ export function ChatPanel({ slug, currentUserId }: Props) {
         : `/api/projects/${slug}/chat?since=${encodeURIComponent(sinceRef.current)}`;
       const res = await fetch(url);
       if (!res.ok) return;
-      const data = await res.json();
-
-      if (initial) {
-        setMessages(data.messages);
-        setMembers(data.members);
-        if (data.messages.length > 0) {
-          sinceRef.current = data.messages[data.messages.length - 1].createdAt;
-        }
-      } else {
-        if (data.messages.length > 0) {
-          setMessages((prev) => [...prev, ...data.messages]);
-          sinceRef.current = data.messages[data.messages.length - 1].createdAt;
-        }
-        setMembers(data.members);
-      }
+      applyPayload(await res.json(), initial);
     } catch {
-      // network error — polling will retry
+      // network error — retry on next tick
     }
-  }, [slug]);
+  }, [slug, applyPayload]);
 
   const pingPresence = useCallback(async () => {
     await fetch(`/api/projects/${slug}/presence`, { method: "POST" }).catch(() => {});
   }, [slug]);
 
-  // Initial load + polling
+  // Polling transport
   useEffect(() => {
+    if (transport !== "polling") return;
     fetchMessages(true);
     pingPresence();
-
     const msgInterval = setInterval(() => fetchMessages(false), 4000);
     const presenceInterval = setInterval(pingPresence, 30_000);
-
     return () => {
       clearInterval(msgInterval);
       clearInterval(presenceInterval);
     };
-  }, [fetchMessages, pingPresence]);
+  }, [transport, fetchMessages, pingPresence]);
+
+  // WebSocket transport — connects to Go backend when CHAT_TRANSPORT=websocket
+  useEffect(() => {
+    if (transport !== "websocket" || !wsUrl) return;
+    // TODO: connect to Go backend WebSocket
+    // Expected protocol: server pushes { messages, members } JSON frames on connect and on change.
+    // const ws = new WebSocket(`${wsUrl}/projects/${slug}/chat?token=<jwt>`);
+    // ws.onmessage = (e) => applyPayload(JSON.parse(e.data));
+    // return () => ws.close();
+    //
+    // For now fall back to polling so the flag can be toggled without breaking the UI:
+    fetchMessages(true);
+    pingPresence();
+    const msgInterval = setInterval(() => fetchMessages(false), 4000);
+    const presenceInterval = setInterval(pingPresence, 30_000);
+    return () => {
+      clearInterval(msgInterval);
+      clearInterval(presenceInterval);
+    };
+  }, [transport, wsUrl, slug, fetchMessages, pingPresence, applyPayload]);
 
   // Scroll to bottom on new messages
   useEffect(() => {

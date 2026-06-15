@@ -9,6 +9,8 @@ import { ChatPanel } from "@/components/ChatPanel";
 import { LinkedText } from "@/components/SafeLink";
 
 const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
+const CHAT_TRANSPORT = (process.env.CHAT_TRANSPORT ?? "polling") as "polling" | "websocket";
+const CHAT_WS_URL = process.env.CHAT_WS_URL ?? null;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -179,7 +181,12 @@ export default async function DashboardPage({ params, searchParams }: Props) {
             />
           )}
           {tab === "chat" && CHAT_ENABLED && (
-            <ChatPanel slug={slug} currentUserId={session.user.id} />
+            <ChatPanel
+              slug={slug}
+              currentUserId={session.user.id}
+              transport={CHAT_TRANSPORT}
+              wsUrl={CHAT_WS_URL}
+            />
           )}
         </div>
       </main>
