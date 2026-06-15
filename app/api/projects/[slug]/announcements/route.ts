@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser, AuthError } from "@/lib/authz";
 import { CreateAnnouncementSchema } from "@/lib/validators";
 import { apiError } from "@/lib/api";
+import { triage } from "@/lib/moderation";
 
 export async function POST(
   req: NextRequest,
@@ -40,15 +41,40 @@ export async function POST(
 
     const body = CreateAnnouncementSchema.parse(await req.json());
 
-    const announcement = await prisma.announcement.create({
-      data: {
-        projectId: project.id,
-        authorId: user.id,
-        title: body.title,
-        body: body.body,
-        kind: body.kind,
-        publishedAt: new Date(),
-      },
+    // LLM triage
+    const triageResult = await triage(
+      "announcement",
+      `${body.title}\n\n${body.body}`,
+      `project: ${project.title}`,
+    );
+
+    const announcement = await prisma.$transaction(async (tx) => {
+      const a = await tx.announcement.create({
+        data: {
+          projectId: project.id,
+          authorId: user.id,
+          title: body.title,
+          body: body.body,
+          kind: body.kind,
+          publishedAt: new Date(),
+          moderationStatus: triageResult.verdict === "spam" ? "held" : "published",
+        },
+      });
+
+      if (triageResult.verdict !== "clean") {
+        await tx.moderationItem.create({
+          data: {
+            subjectType: "announcement",
+            subjectId: a.id,
+            announcementId: a.id,
+            verdict: triageResult.verdict,
+            confidence: triageResult.confidence,
+            reasons: triageResult.reasons,
+          },
+        });
+      }
+
+      return a;
     });
 
     // Notify all active members (except the author)

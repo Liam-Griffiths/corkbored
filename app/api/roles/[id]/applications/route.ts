@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/authz";
 import { CreateApplicationSchema } from "@/lib/validators";
 import { apiError } from "@/lib/api";
+import { triage } from "@/lib/moderation";
 
 export async function POST(
   req: NextRequest,
@@ -45,24 +46,43 @@ export async function POST(
     const body = CreateApplicationSchema.parse(await req.json());
 
     // Cache applicant's GitHub stats at time of application
-    const githubStats = await prisma.githubStats.findUnique({
-      where: { userId: user.id },
-    });
+    const [githubStats, triageResult] = await Promise.all([
+      prisma.githubStats.findUnique({ where: { userId: user.id } }),
+      triage("application", body.pitch, `role: ${role.title}, project: ${role.project.title}`),
+    ]);
 
-    const application = await prisma.application.create({
-      data: {
-        roleId,
-        applicantId: user.id,
-        pitch: body.pitch,
-        githubStatsCache: githubStats
-          ? {
-              accountAgeYears: githubStats.accountAgeYears,
-              publicRepos: githubStats.publicRepos,
-              commitsLast90d: githubStats.commitsLast90d,
-              topLanguages: githubStats.topLanguages,
-            }
-          : undefined,
-      },
+    const application = await prisma.$transaction(async (tx) => {
+      const app = await tx.application.create({
+        data: {
+          roleId,
+          applicantId: user.id,
+          pitch: body.pitch,
+          moderationStatus: triageResult.verdict === "spam" ? "held" : "published",
+          githubStatsCache: githubStats
+            ? {
+                accountAgeYears: githubStats.accountAgeYears,
+                publicRepos: githubStats.publicRepos,
+                commitsLast90d: githubStats.commitsLast90d,
+                topLanguages: githubStats.topLanguages,
+              }
+            : undefined,
+        },
+      });
+
+      if (triageResult.verdict !== "clean") {
+        await tx.moderationItem.create({
+          data: {
+            subjectType: "application",
+            subjectId: app.id,
+            applicationId: app.id,
+            verdict: triageResult.verdict,
+            confidence: triageResult.confidence,
+            reasons: triageResult.reasons,
+          },
+        });
+      }
+
+      return app;
     });
 
     // Notify project owner
