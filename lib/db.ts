@@ -1,8 +1,15 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "./generated/prisma/client";
 
+function dbUrl(): string {
+  if (process.env.DB_ENV === "dev") {
+    return process.env.DATABASE_URL_DEV ?? process.env.DATABASE_URL!;
+  }
+  return process.env.DATABASE_URL!;
+}
+
 function createPrismaClient() {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+  const adapter = new PrismaPg({ connectionString: dbUrl() });
   return new PrismaClient({ adapter });
 }
 

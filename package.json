@@ -4,11 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:db": "DB_ENV=dev next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:migrate:dev": "DB_ENV=dev prisma migrate dev",
+    "db:seed:dev": "DB_ENV=dev prisma db seed",
+    "db:studio:dev": "DB_ENV=dev prisma studio"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.1",
