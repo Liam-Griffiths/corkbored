@@ -20,7 +20,7 @@ describe("prefilter() — spam rules", () => {
   });
 
   it("flags suspicious TLD URLs", () => {
-    expect(prefilter("Check out this great opportunity at http://earnnow.xyz/join").verdict).toBe("spam");
+    expect(prefilter("Check out this great opportunity at http://earnnow.tk/join").verdict).toBe("spam");
   });
 
   it("flags MLM language", () => {

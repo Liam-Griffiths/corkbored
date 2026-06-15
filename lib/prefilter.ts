@@ -16,7 +16,7 @@ const SPAM_RULES: [string, RegExp][] = [
 
   // Phishing / external redirects
   ["phishing-link",       /\b(click here|verify your|confirm your (account|identity)|suspended|unlock your)\b/i],
-  ["suspicious-url",      /https?:\/\/(?!github\.com|npmjs\.com|crates\.io|docs\.|developer\.)[\w.-]+\.(xyz|tk|ml|ga|cf|gq|top|work|click|loan|win|download)\b/i],
+  ["suspicious-url",      /https?:\/\/(?!github\.com|npmjs\.com|crates\.io|docs\.|developer\.)[\w.-]+\.(tk|ml|ga|cf|gq|top|work|click|loan|win|download)\b/i],
 
   // Mass-post / duplicate spam signals
   ["mass-apply",          /\bi (can do|am able to) (any|all) (kind|type)s? of (work|project|task)/i],
