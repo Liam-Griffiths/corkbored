@@ -56,8 +56,7 @@ async function upsertEvent(data: {
   userId: string;
   kind: "commit" | "pr_merged" | "release";
   externalId: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadata?: any;
+  metadata?: Record<string, string | number | null | undefined>;
   occurredAt: Date;
 }) {
   await prisma.contributionEvent.upsert({
