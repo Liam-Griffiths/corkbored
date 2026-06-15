@@ -60,5 +60,6 @@ export const BoardQuerySchema = z.object({
   q: z.string().optional(),
   tag: z.string().optional(),
   stage: z.enum(["building", "prototype", "launched"]).optional(),
+  sort: z.enum(["latest", "trending", "popular"]).optional(),
   cursor: z.string().optional(),
 });

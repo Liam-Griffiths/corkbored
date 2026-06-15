@@ -8,17 +8,24 @@ interface Props {
   searchParams: Promise<Record<string, string>>;
 }
 
+const BASE_INCLUDE = {
+  tags: true,
+  roles: { where: { status: "open" as const } },
+} as const;
+
 async function getBoard(query: {
   q?: string;
   tag?: string;
   stage?: string;
+  sort?: string;
 }) {
+  const sort = query.sort ?? "latest";
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
   const where = {
     moderationStatus: "published" as const,
     ...(query.stage ? { stage: query.stage as never } : {}),
-    ...(query.tag
-      ? { tags: { some: { tag: query.tag } } }
-      : {}),
+    ...(query.tag ? { tags: { some: { tag: query.tag } } } : {}),
     ...(query.q
       ? {
           OR: [
@@ -29,19 +36,45 @@ async function getBoard(query: {
       : {}),
   };
 
+  const announcementsQuery = prisma.announcement.findMany({
+    where: { moderationStatus: "published", publishedAt: { not: null } },
+    orderBy: { publishedAt: "desc" },
+    take: 10,
+    include: { project: { select: { slug: true, title: true } } },
+  });
+
+  if (sort === "trending") {
+    const [rows, trendCounts, announcements] = await Promise.all([
+      prisma.project.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: BASE_INCLUDE,
+        take: 100,
+      }),
+      prisma.contributionEvent.groupBy({
+        by: ["projectId"],
+        where: { occurredAt: { gte: weekAgo } },
+        _count: { _all: true },
+      }),
+      announcementsQuery,
+    ]);
+    const countMap = new Map(trendCounts.map((r) => [r.projectId, r._count._all]));
+    const projects = [...rows]
+      .sort((a, b) => (countMap.get(b.id) ?? 0) - (countMap.get(a.id) ?? 0))
+      .slice(0, 40);
+    return { projects, announcements };
+  }
+
   const [projects, announcements] = await Promise.all([
     prisma.project.findMany({
       where,
-      orderBy: { createdAt: "desc" },
-      include: { tags: true, roles: { where: { status: "open" } } },
+      orderBy: sort === "popular"
+        ? { memberships: { _count: "desc" } }
+        : { createdAt: "desc" },
+      include: BASE_INCLUDE,
       take: 40,
     }),
-    prisma.announcement.findMany({
-      where: { moderationStatus: "published", publishedAt: { not: null } },
-      orderBy: { publishedAt: "desc" },
-      take: 10,
-      include: { project: { select: { slug: true, title: true } } },
-    }),
+    announcementsQuery,
   ]);
 
   return { projects, announcements };
@@ -107,13 +140,36 @@ export default async function BoardPage({ searchParams }: Props) {
           </section>
         )}
 
+        {/* Sort tabs */}
+        <div className="mb-4 flex gap-1 border-b border-ink/10 pb-0">
+          {(["latest", "trending", "popular"] as const).map((s) => {
+            const active = (params.sort ?? "latest") === s;
+            const qs = buildQuery({ ...params, sort: s });
+            return (
+              <Link
+                key={s}
+                href={`/board${qs}`}
+                className={`-mb-px rounded-t-md border border-b-0 px-4 py-2 font-mono text-xs transition-colors ${
+                  active
+                    ? "border-ink/15 bg-paper text-ink font-medium"
+                    : "border-transparent text-ink-soft hover:text-ink"
+                }`}
+              >
+                {s === "latest" && "⏱ latest"}
+                {s === "trending" && "🔥 trending"}
+                {s === "popular" && "⭐ popular"}
+              </Link>
+            );
+          })}
+        </div>
+
         {/* Filters */}
         <div className="mb-6 flex flex-wrap gap-2">
-          <FilterChip href="/board" active={!params.tag && !params.stage && !params.q} label="all" />
+          <FilterChip href={`/board${buildQuery({ sort: params.sort })}`} active={!params.tag && !params.stage && !params.q} label="all" />
           {allTags.map((tag) => (
             <FilterChip
               key={tag}
-              href={`/board?tag=${encodeURIComponent(tag)}`}
+              href={`/board${buildQuery({ ...params, tag })}`}
               active={params.tag === tag}
               label={tag}
             />
@@ -121,7 +177,7 @@ export default async function BoardPage({ searchParams }: Props) {
           {(["building", "prototype", "launched"] as const).map((s) => (
             <FilterChip
               key={s}
-              href={`/board?stage=${s}`}
+              href={`/board${buildQuery({ ...params, stage: s })}`}
               active={params.stage === s}
               label={s}
             />
@@ -130,6 +186,9 @@ export default async function BoardPage({ searchParams }: Props) {
 
         {/* Search */}
         <form method="GET" action="/board" className="mb-8">
+          {params.sort && params.sort !== "latest" && (
+            <input type="hidden" name="sort" value={params.sort} />
+          )}
           <input
             type="search"
             name="q"
@@ -194,6 +253,12 @@ export default async function BoardPage({ searchParams }: Props) {
       </main>
     </>
   );
+}
+
+function buildQuery(params: Record<string, string | undefined>): string {
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "");
+  if (entries.length === 0) return "";
+  return "?" + new URLSearchParams(entries as [string, string][]).toString();
 }
 
 function FilterChip({
