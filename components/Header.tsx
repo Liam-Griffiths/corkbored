@@ -47,12 +47,20 @@ export async function Header() {
             the board
           </Link>
           {user && (
-            <Link
-              href="/me"
-              className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"
-            >
-              profile
-            </Link>
+            <>
+              <Link
+                href="/me"
+                className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"
+              >
+                profile
+              </Link>
+              <Link
+                href="/projects/new"
+                className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"
+              >
+                pin a project
+              </Link>
+            </>
           )}
         </nav>
 
