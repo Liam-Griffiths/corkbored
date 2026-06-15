@@ -8,10 +8,15 @@ interface Props {
   searchParams: Promise<Record<string, string>>;
 }
 
-const BASE_INCLUDE = {
-  tags: true,
-  roles: { where: { status: "open" as const } },
-} as const;
+const BOOST_ENABLED = process.env.BOOST_ENABLED === "true";
+
+function findProjects(args: Parameters<typeof prisma.project.findMany>[0]) {
+  return prisma.project.findMany({
+    ...args,
+    include: { tags: true, roles: { where: { status: "open" } } },
+  });
+}
+type BoardProject = Awaited<ReturnType<typeof findProjects>>[number];
 
 async function getBoard(query: {
   q?: string;
@@ -21,6 +26,7 @@ async function getBoard(query: {
 }) {
   const sort = query.sort ?? "latest";
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
 
   const where = {
     moderationStatus: "published" as const,
@@ -43,14 +49,20 @@ async function getBoard(query: {
     include: { project: { select: { slug: true, title: true } } },
   });
 
+  const nonBoostedWhere = BOOST_ENABLED
+    ? { ...where, OR: [{ boostedUntil: null }, { boostedUntil: { lte: now } }] }
+    : where;
+
+  const boostedQuery = findProjects({
+    where: { ...where, boostedUntil: { gt: now } },
+    orderBy: { boostedUntil: "desc" },
+    take: BOOST_ENABLED ? 6 : 0,
+  });
+
   if (sort === "trending") {
-    const [rows, trendCounts, announcements] = await Promise.all([
-      prisma.project.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        include: BASE_INCLUDE,
-        take: 100,
-      }),
+    const [boosted, rows, trendCounts, announcements] = await Promise.all([
+      boostedQuery,
+      findProjects({ where: nonBoostedWhere, orderBy: { createdAt: "desc" }, take: 100 }),
       prisma.contributionEvent.groupBy({
         by: ["projectId"],
         where: { occurredAt: { gte: weekAgo } },
@@ -62,22 +74,20 @@ async function getBoard(query: {
     const projects = [...rows]
       .sort((a, b) => (countMap.get(b.id) ?? 0) - (countMap.get(a.id) ?? 0))
       .slice(0, 40);
-    return { projects, announcements };
+    return { boosted, projects, announcements };
   }
 
-  const [projects, announcements] = await Promise.all([
-    prisma.project.findMany({
-      where,
-      orderBy: sort === "popular"
-        ? { memberships: { _count: "desc" } }
-        : { createdAt: "desc" },
-      include: BASE_INCLUDE,
+  const [boosted, projects, announcements] = await Promise.all([
+    boostedQuery,
+    findProjects({
+      where: nonBoostedWhere,
+      orderBy: sort === "popular" ? { memberships: { _count: "desc" } } : { createdAt: "desc" },
       take: 40,
     }),
     announcementsQuery,
   ]);
 
-  return { projects, announcements };
+  return { boosted, projects, announcements };
 }
 
 const PIN_COLORS: Record<string, { dot: string; strong: string }> = {
@@ -107,7 +117,7 @@ function rotationClass(index: number) {
 
 export default async function BoardPage({ searchParams }: Props) {
   const params = BoardQuerySchema.parse(await searchParams);
-  const { projects, announcements } = await getBoard(params);
+  const { boosted, projects, announcements } = await getBoard(params);
 
   const allTags = [
     ...new Set(projects.flatMap((p) => p.tags.map((t) => t.tag))),
@@ -117,6 +127,57 @@ export default async function BoardPage({ searchParams }: Props) {
     <>
       <Header />
       <main className="mx-auto max-w-5xl px-5 pb-16">
+        {/* Boosted projects */}
+        {BOOST_ENABLED && boosted.length > 0 && (
+          <section className="mt-8 mb-6">
+            <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-pin-gold">
+              ⚡ Featured
+            </h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {boosted.map((project, i) => {
+                const colors = pinColor(i);
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/p/${project.slug}`}
+                    className={`group relative rounded-sm bg-paper p-5 pt-6 ring-2 ring-pin-gold/60 shadow-[0_8px_18px_rgba(0,0,0,.22)] transition-[transform,box-shadow] duration-150 hover:scale-[1.02] hover:shadow-[0_14px_26px_rgba(0,0,0,.3)]`}
+                  >
+                    <span
+                      className={`absolute -top-2 left-1/2 -translate-x-1/2 h-4 w-4 rounded-full ${colors.dot}`}
+                      aria-hidden="true"
+                    />
+                    <span className="absolute top-2 right-2 rounded-sm bg-pin-gold px-1.5 py-0.5 font-mono text-[0.6rem] font-semibold text-ink uppercase tracking-wide">
+                      boosted
+                    </span>
+                    <p className="mb-1.5 truncate font-mono text-xs text-ink-soft">
+                      github.com/{project.repoFullName}
+                    </p>
+                    <h3 className="mb-2 font-display font-semibold text-base leading-snug text-ink">
+                      {project.title}
+                    </h3>
+                    <div className="mb-3 flex flex-wrap gap-1.5">
+                      {project.tags.map((t) => (
+                        <span key={t.tag} className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">
+                          {t.tag}
+                        </span>
+                      ))}
+                      <span className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">
+                        {project.stage}
+                      </span>
+                    </div>
+                    {project.roles.length > 0 && (
+                      <p className="border-t border-dashed border-paper-edge pt-2.5 text-[0.8rem] text-ink">
+                        <strong className={`font-semibold ${colors.strong}`}>Needs:</strong>{" "}
+                        {project.roles.map((r) => r.title).join(" · ")}
+                      </p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Fresh off the board */}
         {announcements.length > 0 && (
           <section className="mt-8 mb-6">
