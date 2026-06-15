@@ -12,6 +12,12 @@
 
 ---
 
+## Go backend
+
+See **[NOTES-BACKEND.md](./NOTES-BACKEND.md)** for the full runbook — architecture, WebSocket protocol, auth flow, env vars, and Linode deploy steps.
+
+---
+
 ## HUMAN TASKS before launch (Task 9.3)
 
 ### 1. Deploy to Vercel
