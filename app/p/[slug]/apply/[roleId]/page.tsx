@@ -2,7 +2,6 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { Header } from "@/components/Header";
 
 interface Props {
   params: Promise<{ slug: string; roleId: string }>;
@@ -81,7 +80,6 @@ export default async function ApplyPage({ params }: Props) {
 
   return (
     <>
-      <Header />
       <main className="mx-auto max-w-xl px-5 py-10">
         <Link href={`/p/${slug}`} className="mb-6 inline-block font-mono text-sm text-ink-soft hover:text-ink">
           ← back to {role.project.title}

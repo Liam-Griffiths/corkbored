@@ -26,9 +26,10 @@ interface Props {
   currentUserId: string;
   transport: "polling" | "websocket";
   wsUrl: string | null;
+  fullHeight?: boolean;
 }
 
-export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
+export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [typingUsers, setTypingUsers] = useState<{ userId: string; displayName: string }[]>([]);
@@ -186,7 +187,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   const onlineCount = members.filter((m) => m.online).length;
 
   return (
-    <div className="flex h-[600px] rounded-sm border border-paper-edge bg-paper shadow-[0_8px_18px_rgba(0,0,0,.18)] overflow-hidden">
+    <div className={`flex ${fullHeight ? "h-full" : "h-[600px]"} rounded-sm border border-paper-edge bg-paper shadow-[0_8px_18px_rgba(0,0,0,.18)] overflow-hidden`}>
       {/* Sidebar: members */}
       <aside className="w-48 flex-shrink-0 border-r border-paper-edge bg-board flex flex-col">
         <div className="px-3 py-3 border-b border-paper-edge">
