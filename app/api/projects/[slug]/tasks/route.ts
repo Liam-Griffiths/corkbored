@@ -20,17 +20,18 @@ export async function POST(
     if (!project.memberships.length) throw new AuthError(403, "Members only");
 
     const body = CreateTaskSchema.parse(await req.json());
+    const status = body.status ?? "todo";
 
-    // Position at the end of the todo column
+    // Position at the end of the target column
     const last = await prisma.task.findFirst({
-      where: { projectId: project.id, status: "todo" },
+      where: { projectId: project.id, status },
       orderBy: { position: "desc" },
       select: { position: true },
     });
     const position = (last?.position ?? 0) + 1000;
 
     const task = await prisma.task.create({
-      data: { projectId: project.id, title: body.title, position, createdById: user.id },
+      data: { projectId: project.id, title: body.title, status, position, createdById: user.id },
       include: {
         assignee: { select: { id: true, displayName: true, githubLogin: true } },
         createdBy: { select: { id: true, displayName: true, githubLogin: true } },

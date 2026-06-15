@@ -35,7 +35,25 @@ const COL_COLORS: Record<string, string> = {
   done: "border-t-pin-teal",
 };
 
-type View = "board" | "backlog" | "archived";
+// Cork-board pin colours per status — a subtle nod to the board metaphor.
+const PIN_COLORS: Record<Status, string> = {
+  backlog: "bg-ink-soft/60",
+  todo: "bg-ink-soft",
+  doing: "bg-pin-gold",
+  done: "bg-pin-teal",
+  archived: "bg-ink-soft/40",
+};
+
+function Pin({ status }: { status: Status }) {
+  return (
+    <span
+      className={`inline-block h-2 w-2 flex-shrink-0 rounded-full shadow-[inset_-1px_-1px_2px_rgba(0,0,0,.35)] ${PIN_COLORS[status]}`}
+      aria-hidden="true"
+    />
+  );
+}
+
+type View = "backlog" | "board" | "archived";
 
 export function KanbanBoard({
   initialTasks,
@@ -48,8 +66,6 @@ export function KanbanBoard({
 }) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [view, setView] = useState<View>("board");
-  const [adding, setAdding] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const dragId = useRef<string | null>(null);
   const dragOverId = useRef<string | null>(null);
@@ -69,18 +85,17 @@ export function KanbanBoard({
     if (!res.ok) setTasks(initialTasks);
   }
 
-  async function createTask() {
-    if (!newTitle.trim()) return;
+  async function createTask(title: string, status: Status) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
     const res = await fetch(`/api/projects/${projectSlug}/tasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTitle.trim() }),
+      body: JSON.stringify({ title: trimmed, status }),
     });
     if (res.ok) {
       const t = await res.json() as Task;
       setTasks((prev) => [...prev, { ...t, tags: t.tags ?? [] }]);
-      setNewTitle("");
-      setAdding(false);
     }
   }
 
@@ -156,27 +171,28 @@ export function KanbanBoard({
   const memberLogin = (assigneeId: string | null) =>
     members.find((m) => m.id === assigneeId)?.githubLogin ?? "";
 
+  // Backlog → Board → Archive
   const tabs: { id: View; label: string; count?: number }[] = [
-    { id: "board", label: "Board" },
     { id: "backlog", label: "Backlog", count: backlogCount },
+    { id: "board", label: "Board" },
     { id: "archived", label: "Archive", count: archivedCount },
   ];
 
   return (
     <div>
       {/* View switcher */}
-      <div className="mb-4 inline-flex rounded-md border border-paper-edge bg-paper p-0.5">
+      <div className="mb-4 inline-flex rounded-md border border-paper-edge bg-paper p-0.5 shadow-[0_2px_6px_rgba(0,0,0,.08)]">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setView(t.id)}
-            className={`rounded px-3 py-1.5 font-mono text-xs transition-colors ${
+            className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-mono text-xs transition-colors ${
               view === t.id ? "bg-ink text-paper" : "text-ink-soft hover:text-ink"
             }`}
           >
             {t.label}
             {t.count != null && t.count > 0 && (
-              <span className={`ml-1.5 ${view === t.id ? "text-paper/70" : "text-ink-soft"}`}>{t.count}</span>
+              <span className={view === t.id ? "text-paper/70" : "text-ink-soft"}>{t.count}</span>
             )}
           </button>
         ))}
@@ -195,46 +211,19 @@ export function KanbanBoard({
             return (
               <div
                 key={col.id}
-                className={`rounded-lg border-t-2 ${COL_COLORS[col.id]} border border-paper-edge bg-board/40 p-3`}
+                className={`rounded-lg border-t-2 ${COL_COLORS[col.id]} border border-paper-edge bg-board/40 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,.4)]`}
                 onDragOver={(e) => onDragOver(e, null)}
                 onDrop={(e) => onDrop(e, col.id)}
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="font-mono text-xs font-medium uppercase tracking-widest text-ink-soft">
+                  <span className="flex items-center gap-2 font-mono text-xs font-medium uppercase tracking-widest text-ink-soft">
+                    <Pin status={col.id} />
                     {col.label}
                   </span>
                   <span className="font-mono text-xs text-ink-soft">{colTasks.length}</span>
                 </div>
 
-                {col.id === "todo" && (
-                  adding ? (
-                    <div className="mb-2">
-                      <input
-                        autoFocus
-                        value={newTitle}
-                        onChange={(e) => setNewTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void createTask();
-                          if (e.key === "Escape") { setAdding(false); setNewTitle(""); }
-                        }}
-                        placeholder="Task title…"
-                        maxLength={120}
-                        className="w-full rounded-md border border-pin-gold bg-paper px-2 py-1.5 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
-                      />
-                      <div className="mt-1.5 flex gap-1.5">
-                        <button onClick={() => void createTask()} className="rounded-md bg-pin-red px-2.5 py-1 font-mono text-xs text-white">Add</button>
-                        <button onClick={() => { setAdding(false); setNewTitle(""); }} className="rounded-md border border-paper-edge px-2.5 py-1 font-mono text-xs text-ink-soft">Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAdding(true)}
-                      className="mb-2 w-full rounded-md border border-dashed border-paper-edge py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink"
-                    >
-                      + Add task
-                    </button>
-                  )
-                )}
+                {col.id === "todo" && <AddTask status="todo" onCreate={createTask} />}
 
                 <div className="space-y-2">
                   {colTasks.map((task) => (
@@ -245,8 +234,13 @@ export function KanbanBoard({
                       onDrag={onDrag}
                       onDragOver={(e) => onDragOver(e, task.id)}
                       onClick={() => handleCardClick(task.id)}
-                      className="group cursor-pointer rounded-md border border-paper-edge bg-paper p-2.5 shadow-sm active:opacity-60 hover:border-ink-soft hover:shadow-md transition-shadow"
+                      className="group relative cursor-pointer rounded-md border border-paper-edge bg-paper p-2.5 pt-3 shadow-[0_2px_5px_rgba(0,0,0,.1)] active:opacity-60 hover:border-ink-soft hover:shadow-[0_4px_10px_rgba(0,0,0,.15)] transition-shadow"
                     >
+                      {/* Pin tack at the top of each card */}
+                      <span
+                        className={`absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full shadow-[0_1px_2px_rgba(0,0,0,.4)] ${PIN_COLORS[col.id]}`}
+                        aria-hidden="true"
+                      />
                       <p className="text-sm text-ink leading-snug">{task.title}</p>
 
                       {task.tags.length > 0 && (
@@ -306,27 +300,46 @@ export function KanbanBoard({
       )}
 
       {view === "backlog" && (
-        <TaskList
-          tasks={tasks.filter((t) => t.status === "backlog")}
-          emptyText="Nothing in the backlog. Send tasks here from the To do column when they're not ready yet."
-          actionLabel="→ To do"
-          onAction={(id) => moveTask(id, "todo")}
-          onOpen={setOpenTaskId}
-          getMemberInitial={getMemberInitial}
-          memberLogin={memberLogin}
-        />
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Pin status="backlog" />
+            <h3 className="font-mono text-xs font-medium uppercase tracking-widest text-ink-soft">Backlog</h3>
+          </div>
+          <div className="mb-3 max-w-xl">
+            <AddTask status="backlog" onCreate={createTask} />
+          </div>
+          <div className="max-w-xl">
+            <TaskList
+              tasks={tasks.filter((t) => t.status === "backlog")}
+              emptyText="Nothing in the backlog yet. Add ideas here, or send tasks back from the To do column."
+              actionLabel="→ To do"
+              onAction={(id) => moveTask(id, "todo")}
+              onOpen={setOpenTaskId}
+              getMemberInitial={getMemberInitial}
+              memberLogin={memberLogin}
+            />
+          </div>
+        </div>
       )}
 
       {view === "archived" && (
-        <TaskList
-          tasks={tasks.filter((t) => t.status === "archived")}
-          emptyText="No archived tasks. Completed work you no longer need on the board lands here."
-          actionLabel="Restore"
-          onAction={(id) => moveTask(id, "done")}
-          onOpen={setOpenTaskId}
-          getMemberInitial={getMemberInitial}
-          memberLogin={memberLogin}
-        />
+        <div>
+          <div className="mb-3 flex items-center gap-2">
+            <Pin status="archived" />
+            <h3 className="font-mono text-xs font-medium uppercase tracking-widest text-ink-soft">Archive</h3>
+          </div>
+          <div className="max-w-xl">
+            <TaskList
+              tasks={tasks.filter((t) => t.status === "archived")}
+              emptyText="No archived tasks. Completed work you no longer need on the board lands here."
+              actionLabel="Restore"
+              onAction={(id) => moveTask(id, "done")}
+              onOpen={setOpenTaskId}
+              getMemberInitial={getMemberInitial}
+              memberLogin={memberLogin}
+            />
+          </div>
+        </div>
       )}
 
       {view === "board" && (
@@ -346,6 +359,56 @@ export function KanbanBoard({
           onDelete={(id) => setTasks((prev) => prev.filter((t) => t.id !== id))}
         />
       )}
+    </div>
+  );
+}
+
+function AddTask({
+  status,
+  onCreate,
+}: {
+  status: Status;
+  onCreate: (title: string, status: Status) => Promise<void>;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [title, setTitle] = useState("");
+
+  async function submit() {
+    if (!title.trim()) return;
+    await onCreate(title, status);
+    setTitle("");
+    setAdding(false);
+  }
+
+  if (!adding) {
+    return (
+      <button
+        onClick={() => setAdding(true)}
+        className="mb-2 w-full rounded-md border border-dashed border-paper-edge py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink"
+      >
+        + Add task
+      </button>
+    );
+  }
+
+  return (
+    <div className="mb-2">
+      <input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void submit();
+          if (e.key === "Escape") { setAdding(false); setTitle(""); }
+        }}
+        placeholder="Task title…"
+        maxLength={120}
+        className="w-full rounded-md border border-pin-gold bg-paper px-2 py-1.5 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
+      />
+      <div className="mt-1.5 flex gap-1.5">
+        <button onClick={() => void submit()} className="rounded-md bg-pin-red px-2.5 py-1 font-mono text-xs text-white">Add</button>
+        <button onClick={() => { setAdding(false); setTitle(""); }} className="rounded-md border border-paper-edge px-2.5 py-1 font-mono text-xs text-ink-soft">Cancel</button>
+      </div>
     </div>
   );
 }
@@ -384,7 +447,7 @@ function TaskList({
           <div
             key={task.id}
             onClick={() => onOpen(task.id)}
-            className="group flex cursor-pointer items-center gap-3 rounded-md border border-paper-edge bg-paper p-3 hover:border-ink-soft hover:shadow-md transition-shadow"
+            className="group flex cursor-pointer items-center gap-3 rounded-md border border-paper-edge bg-paper p-3 shadow-[0_2px_5px_rgba(0,0,0,.1)] hover:border-ink-soft hover:shadow-[0_4px_10px_rgba(0,0,0,.15)] transition-shadow"
           >
             {task.assigneeId ? (
               <span className="inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-pin-teal text-[0.62rem] font-semibold text-white" title={memberLogin(task.assigneeId)}>

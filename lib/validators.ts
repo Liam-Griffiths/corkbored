@@ -36,6 +36,7 @@ export const CreateAnnouncementSchema = z.object({
 
 export const CreateTaskSchema = z.object({
   title: z.string().min(1).max(120),
+  status: z.enum(["backlog", "todo", "doing", "done", "archived"]).optional(),
 });
 
 export const PatchTaskSchema = z.object({
