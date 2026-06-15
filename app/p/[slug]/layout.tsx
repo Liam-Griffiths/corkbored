@@ -6,6 +6,7 @@ import { Header } from "@/components/Header";
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { FollowButton } from "@/components/FollowButton";
 import { ShareButtons } from "@/components/ShareButtons";
+import { EditProjectModal } from "@/components/EditProjectModal";
 import { LinkedText } from "@/components/SafeLink";
 import { getOrCreateProjectShortlink } from "@/lib/shortlink";
 
@@ -101,6 +102,15 @@ export default async function ProjectLayout({
                 >
                   {project.stage}
                 </span>
+                {isOwner && (
+                  <EditProjectModal
+                    slug={slug}
+                    initialTitle={project.title}
+                    initialPitch={project.pitch ?? ""}
+                    initialStage={project.stage as "building" | "prototype" | "launched"}
+                    initialTags={project.tags.map((t) => t.tag)}
+                  />
+                )}
               </div>
               <a
                 href={`https://github.com/${project.repoFullName}`}
