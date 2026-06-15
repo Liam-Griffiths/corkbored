@@ -48,9 +48,11 @@ enum MembershipRole {
 }
 
 enum TaskStatus {
+  backlog
   todo
   doing
   done
+  archived
 }
 
 enum ContributionKind {

@@ -41,7 +41,7 @@ export const CreateTaskSchema = z.object({
 export const PatchTaskSchema = z.object({
   title: z.string().min(1).max(120).optional(),
   description: z.string().max(10000).nullable().optional(),
-  status: z.enum(["todo", "doing", "done"]).optional(),
+  status: z.enum(["backlog", "todo", "doing", "done", "archived"]).optional(),
   assigneeId: z.string().nullable().optional(),
   position: z.number().optional(),
   tags: z.array(z.string().max(30)).max(10).optional(),

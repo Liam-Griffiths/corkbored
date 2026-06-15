@@ -76,7 +76,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
               />
             </div>
           ) : (
-            <div className="rounded-sm border border-dashed border-paper-edge bg-paper p-8 text-center">
+            <div className="flex h-[560px] flex-col items-center justify-center rounded-sm border border-dashed border-paper-edge bg-paper p-8 text-center">
               <p className="font-mono text-sm text-ink-soft">Live chat is off for now.</p>
               <Link href={`/p/${slug}/discussion`} className="mt-2 inline-block font-mono text-xs text-pin-teal hover:underline">
                 Open the discussion board →
@@ -85,8 +85,10 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           )}
         </section>
 
-        {/* Side column: pulse + activity + announcements */}
-        <aside className="space-y-6">
+        {/* Side column: pulse + activity + announcements.
+            mt-7 aligns the top with the chat panel (offsets the left column's
+            "Team chat" heading: text-xs line ≈ 1rem + mb-3 0.75rem). */}
+        <aside className="space-y-6 lg:mt-7">
           {/* Pulse */}
           <div className="rounded-sm bg-paper p-4 shadow-[0_6px_16px_rgba(0,0,0,.12)]">
             <p className="mb-3 font-mono text-[0.62rem] uppercase tracking-widest text-ink-soft">Pulse</p>

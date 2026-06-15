@@ -44,7 +44,7 @@ export default async function TasksPage({ params }: { params: Promise<{ slug: st
       <KanbanBoard
         initialTasks={tasks.map((t) => ({
           ...t,
-          status: t.status as "todo" | "doing" | "done",
+          status: t.status as "backlog" | "todo" | "doing" | "done" | "archived",
           tags: Array.isArray(t.tags) ? (t.tags as string[]) : [],
         }))}
         members={members}

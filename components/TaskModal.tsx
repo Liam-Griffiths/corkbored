@@ -6,7 +6,7 @@ export type TaskDetail = {
   id: string;
   title: string;
   description: string | null;
-  status: "todo" | "doing" | "done";
+  status: "backlog" | "todo" | "doing" | "done" | "archived";
   position: number;
   assigneeId: string | null;
   assignee?: { id: string; displayName: string | null; githubLogin: string | null } | null;
@@ -18,11 +18,13 @@ export type TaskDetail = {
 
 type Member = { id: string; displayName: string | null; githubLogin: string | null };
 
-const STATUS_LABELS = { todo: "To do", doing: "In progress", done: "Done" };
+const STATUS_LABELS = { backlog: "Backlog", todo: "To do", doing: "In progress", done: "Done", archived: "Archived" };
 const STATUS_COLORS = {
+  backlog: "bg-board text-ink-soft",
   todo: "bg-paper-edge text-ink-soft",
   doing: "bg-[#fff8e1] text-pin-gold",
   done: "bg-[#d9efe6] text-pin-teal",
+  archived: "bg-board text-ink-soft",
 };
 
 export function TaskModal({
@@ -135,8 +137,8 @@ export function TaskModal({
 
         <div className="overflow-y-auto px-5 pb-5 pt-3 space-y-5">
           {/* Status + saving */}
-          <div className="flex items-center gap-2">
-            {(["todo", "doing", "done"] as const).map((s) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {(["backlog", "todo", "doing", "done", "archived"] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => void patch({ status: s })}
