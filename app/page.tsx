@@ -261,7 +261,7 @@ export default function LandingPage() {
               <div className="grid">
                 <div>
                   <h3>{"// the team feeling, again"}</h3>
-                  <p>Too many million-dollar ideas sit abandoned because one person ran out of steam. Find builders who actually want to be there — people who chose your project, not just anyone with a GitHub account.</p>
+                  <p>Million-dollar ideas sit abandoned because one person ran out of steam. Find builders who actually want to be there — people who chose your project, not just anyone with a GitHub account.</p>
                 </div>
                 <div>
                   <h3>{"// the builders pledge"}</h3>
