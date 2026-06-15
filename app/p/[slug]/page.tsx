@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
+import { LinkedText } from "@/components/SafeLink";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -93,7 +94,7 @@ export default async function ProjectPage({ params }: Props) {
           {/* Pitch */}
           {project.pitch && (
             <p className="mb-6 max-w-2xl text-[0.97rem] text-ink/80">
-              {project.pitch}
+              <LinkedText text={project.pitch} />
             </p>
           )}
 
@@ -129,7 +130,7 @@ export default async function ProjectPage({ params }: Props) {
                         {a.kind.replace("_", " ")}
                       </span>
                     </div>
-                    <p className="text-sm text-ink/75">{a.body}</p>
+                    <p className="text-sm text-ink/75"><LinkedText text={a.body} /></p>
                   </div>
                 ))}
               </div>

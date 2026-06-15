@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { DiscussionThread } from "@/components/DiscussionThread";
+import { LinkedText } from "@/components/SafeLink";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -234,7 +235,7 @@ function ApplicationsTab({ project, slug, isOwner }: { project: Project; slug: s
             )}
 
             <blockquote className="mb-3 border-l-4 border-pin-gold pl-3 text-sm text-ink/80 italic">
-              {app.pitch}
+              <LinkedText text={app.pitch} />
             </blockquote>
 
             {inviteFailed && app.status === "accepted" && (
@@ -464,7 +465,7 @@ function AnnouncementsTab({ project, slug }: { project: Project; slug: string })
                   <span className="rounded-full bg-[#fff8e1] px-2 py-0.5 font-mono text-xs text-pin-gold">held</span>
                 )}
               </div>
-              <p className="text-sm text-ink/80 mb-1">{a.body}</p>
+              <p className="text-sm text-ink/80 mb-1"><LinkedText text={a.body} /></p>
               <p className="font-mono text-xs text-ink-soft">
                 by {a.author?.displayName ?? a.author?.githubLogin} · {a.publishedAt ? new Date(a.publishedAt).toLocaleDateString() : "draft"}
               </p>

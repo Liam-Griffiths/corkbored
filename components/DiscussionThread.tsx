@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LinkedText } from "./SafeLink";
 
 type Author = {
   id: string;
@@ -48,7 +49,7 @@ function Bubble({
           </span>
         </div>
         <div className="rounded-lg border border-paper-edge bg-paper-bright px-3 py-2 text-sm text-ink whitespace-pre-wrap break-words">
-          {message.body}
+          <LinkedText text={message.body} />
         </div>
         {!isReply && onReply && (
           <button
