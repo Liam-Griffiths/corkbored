@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { LinkedText } from "@/components/SafeLink";
@@ -22,8 +23,15 @@ async function publishedTodayCount(projectId: string) {
   return prisma.announcement.count({ where: { projectId, publishedAt: { gte: today } } });
 }
 
-export default async function AnnouncementsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function AnnouncementsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ edit?: string }>;
+}) {
   const { slug } = await params;
+  const { edit } = await searchParams;
   const session = await auth();
 
   const project = await prisma.project.findUnique({
@@ -56,6 +64,11 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
   const drafts = announcements.filter((a) => !a.publishedAt);
   const published = announcements.filter((a) => a.publishedAt);
 
+  // Draft currently being edited (must be an unpublished draft on this project).
+  const editingDraft = canPost && edit
+    ? drafts.find((a) => a.id === edit) ?? null
+    : null;
+
   async function createAnnouncement(formData: FormData) {
     "use server";
     const s = await auth();
@@ -73,6 +86,34 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
       data: {
         projectId: project!.id,
         authorId: s.user.id,
+        title, body,
+        kind: kind as "update" | "release" | "roles_open" | "milestone",
+        publishedAt: publish ? new Date() : null,
+      },
+    });
+    redirect(`/p/${slug}/announcements`);
+  }
+
+  async function updateAnnouncement(formData: FormData) {
+    "use server";
+    const s = await auth();
+    if (!s?.user?.id || !(await canManage(project!.id, s.user.id))) return;
+
+    const id = formData.get("id") as string;
+    const draft = await prisma.announcement.findUnique({ where: { id }, select: { projectId: true, publishedAt: true } });
+    if (!draft || draft.projectId !== project!.id || draft.publishedAt) return;
+
+    const title = (formData.get("title") as string)?.trim();
+    const body = (formData.get("body") as string)?.trim();
+    const kind = (formData.get("kind") as string) || "update";
+    const publish = formData.get("intent") === "publish";
+    if (!title || !body) return;
+
+    if (publish && (await publishedTodayCount(project!.id)) >= 3) return;
+
+    await prisma.announcement.update({
+      where: { id },
+      data: {
         title, body,
         kind: kind as "update" | "release" | "roles_open" | "milestone",
         publishedAt: publish ? new Date() : null,
@@ -113,15 +154,22 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
       <h1 className="font-display font-bold text-xl text-ink mb-6">Announcements</h1>
 
       {canPost && (
-        <form action={createAnnouncement} className="mb-8 rounded-lg border border-paper-edge bg-paper p-5 space-y-3">
-          <p className="font-mono text-xs uppercase tracking-widest text-ink-soft">Post an update</p>
+        <form
+          action={editingDraft ? updateAnnouncement : createAnnouncement}
+          className={`mb-8 rounded-lg border bg-paper p-5 space-y-3 ${editingDraft ? "border-pin-gold/60 shadow-[0_4px_14px_rgba(0,0,0,.1)]" : "border-paper-edge"}`}
+        >
+          {editingDraft && <input type="hidden" name="id" value={editingDraft.id} />}
+          <p className="font-mono text-xs uppercase tracking-widest text-ink-soft">
+            {editingDraft ? "Edit draft" : "Post an update"}
+          </p>
           <input
             name="title" required maxLength={120}
+            defaultValue={editingDraft?.title ?? ""}
             placeholder="Announcement title"
             className="w-full rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
           />
           <div className="flex gap-2">
-            <select name="kind" className="rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-mono text-sm text-ink focus:outline-2 focus:outline-pin-gold">
+            <select name="kind" defaultValue={editingDraft?.kind ?? "update"} className="rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-mono text-sm text-ink focus:outline-2 focus:outline-pin-gold">
               <option value="update">Update</option>
               <option value="release">Release</option>
               <option value="roles_open">Roles open</option>
@@ -129,7 +177,8 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
             </select>
           </div>
           <textarea
-            name="body" required rows={3} maxLength={5000}
+            name="body" required rows={editingDraft ? 5 : 3} maxLength={5000}
+            defaultValue={editingDraft?.body ?? ""}
             placeholder="What's new?"
             className="w-full resize-y rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
           />
@@ -146,16 +195,25 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
             >
               Save draft
             </button>
+            {editingDraft && (
+              <Link
+                href={`/p/${slug}/announcements`}
+                className="ml-auto rounded-md px-3 py-2 font-mono text-sm text-ink-soft hover:text-ink"
+              >
+                Cancel
+              </Link>
+            )}
           </div>
         </form>
       )}
 
-      {/* Drafts — only shown to people who can post */}
-      {canPost && drafts.length > 0 && (
+      {/* Drafts — only shown to people who can post. The one being edited
+          lives in the form above, so it's excluded here. */}
+      {canPost && drafts.filter((a) => a.id !== editingDraft?.id).length > 0 && (
         <div className="mb-8">
           <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-widest text-ink-soft">Drafts</p>
           <div className="space-y-3">
-            {drafts.map((a) => (
+            {drafts.filter((a) => a.id !== editingDraft?.id).map((a) => (
               <div key={a.id} className="rounded-lg border border-dashed border-pin-gold/50 bg-[#fffaf0] p-5">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-ink">{a.title}</span>
@@ -166,6 +224,12 @@ export default async function AnnouncementsPage({ params }: { params: Promise<{ 
                 </div>
                 <p className="mb-3 text-sm text-ink/80"><LinkedText text={a.body} /></p>
                 <div className="flex items-center gap-2">
+                  <Link
+                    href={`/p/${slug}/announcements?edit=${a.id}`}
+                    className="rounded-md border border-paper-edge px-3 py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink"
+                  >
+                    Edit
+                  </Link>
                   <form action={publishDraft}>
                     <input type="hidden" name="id" value={a.id} />
                     <button type="submit" className="rounded-md bg-pin-teal px-3 py-1.5 font-mono text-xs text-white shadow-[0_2px_0_#0e5a47] hover:-translate-y-px">
