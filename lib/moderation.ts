@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { prefilter } from "./prefilter";
 
 export type TriageVerdict = "clean" | "borderline" | "spam";
 
@@ -59,6 +60,18 @@ export async function triage(
   text: string,
   context?: string,
 ): Promise<TriageResult> {
+  // Stage 1: synchronous rule-based prefilter (no API call, always runs)
+  const pre = prefilter(text);
+  if (pre.verdict === "spam") {
+    return { verdict: "spam", confidence: 1, reasons: pre.reason };
+  }
+
+  // Stage 2: AI triage — skip if no API key configured
+  if (!process.env.ANTHROPIC_API_KEY) {
+    // Prefilter passed, but AI is off — queue for human review rather than auto-publish
+    return { verdict: "borderline", confidence: 0, reasons: "AI triage disabled — queued for human review" };
+  }
+
   try {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
