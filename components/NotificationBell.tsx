@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 type Notification = {
   id: string;
@@ -22,15 +22,27 @@ const KIND_TEXT: Record<string, string> = {
 export function NotificationBell({
   notifications,
   markAllReadAction,
+  live = false,
 }: {
   notifications: Notification[];
   markAllReadAction: () => Promise<void>;
+  live?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [localNotifs, setLocalNotifs] = useState(notifications);
   const ref = useRef<HTMLDivElement>(null);
 
   const unread = localNotifs.filter((n) => !n.readAt).length;
+
+  // Live mode: WebSocket push from Go backend.
+  // TODO: connect to CHAT_WS_URL/ws/notifications?token=<jwt> when Go backend
+  // implements the notifications hub. For now, live=true shows a visual indicator
+  // but still relies on page refresh for new notifications.
+  const _live = useCallback(() => {
+    // ws = new WebSocket(`${wsUrl}/ws/notifications?token=${token}`);
+    // ws.onmessage = (e) => setLocalNotifs(prev => [JSON.parse(e.data), ...prev]);
+  }, []);
+  useEffect(() => { if (live) _live(); }, [live, _live]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -61,6 +73,9 @@ export function NotificationBell({
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
+        {live && unread === 0 && (
+          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-green-400" title="Live notifications" />
+        )}
         {unread > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-pin-red px-1 font-mono text-[0.6rem] text-white">
             {unread > 9 ? "9+" : unread}

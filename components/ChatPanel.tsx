@@ -31,6 +31,7 @@ interface Props {
 export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [typingUsers, setTypingUsers] = useState<{ userId: string; displayName: string }[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [visible, setVisible] = useState(true);
@@ -38,6 +39,23 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
   const sinceRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const typingTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const typingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleTyping = useCallback((userId: string, displayName: string) => {
+    if (userId === currentUserId) return;
+    setTypingUsers((prev) => {
+      if (prev.some((u) => u.userId === userId)) return prev;
+      return [...prev, { userId, displayName }];
+    });
+    // Auto-clear after 3s of no new typing events
+    const existing = typingTimeouts.current.get(userId);
+    if (existing) clearTimeout(existing);
+    typingTimeouts.current.set(userId, setTimeout(() => {
+      setTypingUsers((prev) => prev.filter((u) => u.userId !== userId));
+      typingTimeouts.current.delete(userId);
+    }, 3000));
+  }, [currentUserId]);
 
   const applyPayload = useCallback((data: { messages: ChatMessage[]; members: Member[] }, initial = false) => {
     if (initial) {
@@ -109,6 +127,10 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
               applyPayload({ messages: frame.messages ?? [], members: frame.members ?? [] }, true);
             } else if (frame.type === "message" && frame.message) {
               setMessages((prev) => [...prev, frame.message]);
+              // Clear typing indicator for the sender when their message arrives
+              setTypingUsers((prev) => prev.filter((u) => u.userId !== frame.message.user.id));
+            } else if (frame.type === "typing") {
+              handleTyping(frame.userId, frame.displayName);
             } else if (frame.type === "presence") {
               setMembers(frame.members ?? []);
             }
@@ -127,7 +149,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
       ws?.close();
       clearTimeout(reconnectTimeout);
     };
-  }, [transport, wsUrl, slug, applyPayload]);
+  }, [transport, wsUrl, slug, applyPayload, handleTyping]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -268,13 +290,29 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl }: Props) {
               <div ref={bottomRef} />
             </div>
 
+            {/* Typing indicator */}
+            {typingUsers.length > 0 && (
+              <div className="px-4 pb-1 font-mono text-[0.68rem] text-ink-soft italic">
+                {typingUsers.map((u) => u.displayName).join(", ")}
+                {" "}{typingUsers.length === 1 ? "is" : "are"} typing…
+              </div>
+            )}
+
             {/* Input */}
             <div className="border-t border-paper-edge px-4 py-3">
               <div className="flex gap-2 items-end">
                 <textarea
                   ref={inputRef}
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    if (transport === "websocket" && wsRef.current?.readyState === WebSocket.OPEN) {
+                      if (typingDebounce.current) clearTimeout(typingDebounce.current);
+                      typingDebounce.current = setTimeout(() => {
+                        wsRef.current?.send(JSON.stringify({ type: "typing" }));
+                      }, 300);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();

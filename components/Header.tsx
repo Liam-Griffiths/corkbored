@@ -3,6 +3,8 @@ import { auth, signIn, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { NotificationBell } from "./NotificationBell";
 
+const LIVE_NOTIFICATIONS_ENABLED = process.env.LIVE_NOTIFICATIONS_ENABLED === "true";
+
 export async function Header() {
   const session = await auth();
   const user = session?.user;
@@ -69,6 +71,7 @@ export async function Header() {
             <NotificationBell
               notifications={notifications}
               markAllReadAction={markAllRead}
+              live={LIVE_NOTIFICATIONS_ENABLED}
             />
           )}
           {user ? (

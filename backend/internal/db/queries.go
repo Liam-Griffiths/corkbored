@@ -113,6 +113,26 @@ func IsMember(ctx context.Context, projectID, userID string) (bool, error) {
 	return exists, err
 }
 
+type MemberUserResult struct {
+	ID          string
+	DisplayName string // githubLogin fallback if display_name is null
+}
+
+// MemberUser fetches basic user info for an active member, or errors if not a member.
+func MemberUser(ctx context.Context, projectID, userID string) (*MemberUserResult, error) {
+	const q = `
+		SELECT u.id, COALESCE(u.display_name, u.github_login, u.id)
+		FROM "Membership" m
+		JOIN "User" u ON u.id = m.user_id
+		WHERE m.project_id = $1 AND m.user_id = $2 AND m.left_at IS NULL`
+	var r MemberUserResult
+	err := Pool.QueryRow(ctx, q, projectID, userID).Scan(&r.ID, &r.DisplayName)
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
 // Members returns all active members of a project with their last presence time.
 func Members(ctx context.Context, projectID string) ([]Member, error) {
 	const q = `

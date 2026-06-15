@@ -17,10 +17,11 @@ const (
 
 // Client is a single WebSocket connection attached to a Hub.
 type Client struct {
-	hub    *Hub
-	conn   *websocket.Conn
-	send   chan []byte
-	UserID string
+	hub         *Hub
+	conn        *websocket.Conn
+	send        chan []byte
+	UserID      string
+	DisplayName string // for typing broadcast
 }
 
 var upgrader = websocket.Upgrader{
@@ -33,8 +34,8 @@ var upgrader = websocket.Upgrader{
 }
 
 // readPump pumps messages from the WebSocket to the hub.
-// Inbound messages are { "type": "message", "body": "..." }
-func (c *Client) readPump(onMessage func(body string)) {
+// Inbound: { "type": "message", "body": "..." } | { "type": "typing" }
+func (c *Client) readPump(onMessage func(body string), onTyping func()) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -57,8 +58,13 @@ func (c *Client) readPump(onMessage func(body string)) {
 			}
 			break
 		}
-		if msg.Type == "message" && len(msg.Body) > 0 && len(msg.Body) <= 2000 {
-			onMessage(msg.Body)
+		switch msg.Type {
+		case "message":
+			if len(msg.Body) > 0 && len(msg.Body) <= 2000 {
+				onMessage(msg.Body)
+			}
+		case "typing":
+			onTyping()
 		}
 	}
 }

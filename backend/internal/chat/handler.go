@@ -12,10 +12,13 @@ import (
 )
 
 type outMessage struct {
-	Type    string        `json:"type"`
-	Message *db.ChatMessage `json:"message,omitempty"`
+	Type     string           `json:"type"`
+	Message  *db.ChatMessage  `json:"message,omitempty"`
 	Messages []db.ChatMessage `json:"messages,omitempty"`
-	Members  []memberView  `json:"members,omitempty"`
+	Members  []memberView     `json:"members,omitempty"`
+	// Typing indicator fields
+	UserID      string `json:"userId,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 }
 
 type memberView struct {
@@ -59,9 +62,9 @@ func ServeWS(w http.ResponseWriter, r *http.Request, slug string) {
 		return
 	}
 
-	// Confirm active membership.
-	ok, err := db.IsMember(ctx, projectID, claims.UserID)
-	if err != nil || !ok {
+	// Confirm active membership and fetch display name for typing broadcasts.
+	user, err := db.MemberUser(ctx, projectID, claims.UserID)
+	if err != nil {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -73,7 +76,13 @@ func ServeWS(w http.ResponseWriter, r *http.Request, slug string) {
 	}
 
 	hub := GetOrCreate(projectID)
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), UserID: claims.UserID}
+	client := &Client{
+		hub:         hub,
+		conn:        conn,
+		send:        make(chan []byte, 256),
+		UserID:      claims.UserID,
+		DisplayName: user.DisplayName,
+	}
 	hub.register <- client
 
 	// Update presence immediately on connect.
@@ -90,12 +99,23 @@ func ServeWS(w http.ResponseWriter, r *http.Request, slug string) {
 	client.send <- initPayload
 
 	go client.writePump()
-	go client.readPump(func(body string) {
-		msg, err := db.InsertMessage(context.Background(), projectID, claims.UserID, body)
-		if err != nil {
-			log.Printf("InsertMessage: %v", err)
-			return
-		}
-		hub.Broadcast(outMessage{Type: "message", Message: msg})
-	})
+	go client.readPump(
+		// onMessage: persist + broadcast
+		func(body string) {
+			msg, err := db.InsertMessage(context.Background(), projectID, claims.UserID, body)
+			if err != nil {
+				log.Printf("InsertMessage: %v", err)
+				return
+			}
+			hub.Broadcast(outMessage{Type: "message", Message: msg})
+		},
+		// onTyping: broadcast to others (no DB write)
+		func() {
+			hub.BroadcastExcept(client, outMessage{
+				Type:        "typing",
+				UserID:      claims.UserID,
+				DisplayName: client.DisplayName,
+			})
+		},
+	)
 }

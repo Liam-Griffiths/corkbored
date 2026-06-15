@@ -65,6 +65,25 @@ func (h *Hub) Broadcast(v any) {
 	h.broadcast <- b
 }
 
+// BroadcastExcept sends to all clients except the sender (e.g. typing indicators).
+func (h *Hub) BroadcastExcept(exclude *Client, v any) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c == exclude {
+			continue
+		}
+		select {
+		case c.send <- b:
+		default:
+		}
+	}
+}
+
 func (h *Hub) ConnectionCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
