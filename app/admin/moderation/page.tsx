@@ -1,24 +1,7 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { Header } from "@/components/Header";
+import { auth } from "@/lib/auth";
 
 export default async function ModerationQueuePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/admin/moderation");
-
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user?.isAdmin) {
-    return (
-      <>
-        <Header />
-        <main className="mx-auto max-w-2xl px-5 py-16 text-center">
-          <p className="font-mono text-sm text-ink-soft">403 — Admin only.</p>
-        </main>
-      </>
-    );
-  }
-
   const items = await prisma.moderationItem.findMany({
     where: { decidedAt: null },
     orderBy: { createdAt: "desc" },
@@ -31,25 +14,22 @@ export default async function ModerationQueuePage() {
   });
 
   return (
-    <>
-      <Header />
-      <main className="mx-auto max-w-3xl px-5 py-8">
-        <h1 className="font-display font-bold text-2xl text-ink mb-1">Moderation queue</h1>
-        <p className="font-mono text-sm text-ink-soft mb-6">{items.length} undecided item{items.length !== 1 ? "s" : ""}</p>
+    <div>
+      <h1 className="font-display font-bold text-2xl text-ink mb-1">Moderation queue</h1>
+      <p className="font-mono text-sm text-ink-soft mb-6">{items.length} undecided item{items.length !== 1 ? "s" : ""}</p>
 
-        {items.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-paper-edge p-10 text-center">
-            <p className="font-mono text-sm text-ink-soft">Queue is clear.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {items.map((item) => (
-              <ModerationCard key={item.id} item={item} />
-            ))}
-          </div>
-        )}
-      </main>
-    </>
+      {items.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-paper-edge p-10 text-center">
+          <p className="font-mono text-sm text-ink-soft">Queue is clear.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {items.map((item) => (
+            <ModerationCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

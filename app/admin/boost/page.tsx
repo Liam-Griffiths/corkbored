@@ -2,36 +2,17 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { Header } from "@/components/Header";
 
 const BOOST_ENABLED = process.env.BOOST_ENABLED === "true";
 
 export default async function AdminBoostPage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/api/auth/signin?callbackUrl=/admin/boost");
-
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user?.isAdmin) {
-    return (
-      <>
-        <Header />
-        <main className="mx-auto max-w-2xl px-5 py-16 text-center">
-          <p className="font-mono text-sm text-ink-soft">403 — Admin only.</p>
-        </main>
-      </>
-    );
-  }
-
   if (!BOOST_ENABLED) {
     return (
-      <>
-        <Header />
-        <main className="mx-auto max-w-2xl px-5 py-16 text-center">
-          <p className="font-mono text-sm text-ink-soft">
-            Boost feature is disabled. Set <code className="bg-paper-edge px-1 rounded">BOOST_ENABLED=true</code> to enable.
-          </p>
-        </main>
-      </>
+      <div className="rounded-lg border border-dashed border-paper-edge p-10 text-center">
+        <p className="font-mono text-sm text-ink-soft">
+          Boost feature is disabled. Set <code className="bg-paper-edge px-1 rounded">BOOST_ENABLED=true</code> to enable.
+        </p>
+      </div>
     );
   }
 
@@ -73,15 +54,8 @@ export default async function AdminBoostPage() {
   }
 
   return (
-    <>
-      <Header />
-      <main className="mx-auto max-w-2xl px-5 py-10">
-        <div className="mb-8 flex items-center gap-4">
-          <h1 className="font-display font-bold text-2xl text-ink">⚡ Boost manager</h1>
-          <Link href="/admin/moderation" className="font-mono text-xs text-ink-soft underline">
-            ← moderation queue
-          </Link>
-        </div>
+    <div>
+      <h1 className="font-display font-bold text-2xl text-ink mb-6">Boost manager</h1>
 
         {/* Set boost form */}
         <section className="mb-8 rounded-sm bg-paper p-6 shadow-[0_8px_18px_rgba(0,0,0,.18)]">
@@ -154,12 +128,11 @@ export default async function AdminBoostPage() {
           )}
         </section>
 
-        <p className="mt-8 font-mono text-xs text-ink-soft">
-          Payment integration: wire <code className="bg-paper-edge px-1 rounded">STRIPE_BOOST_PRICE_ID</code> to{" "}
-          <code className="bg-paper-edge px-1 rounded">/api/webhooks/stripe</code> → sets{" "}
-          <code className="bg-paper-edge px-1 rounded">boostedUntil</code> on checkout completion.
-        </p>
-      </main>
-    </>
+      <p className="mt-8 font-mono text-xs text-ink-soft">
+        Payment integration: wire <code className="bg-paper-edge px-1 rounded">STRIPE_BOOST_PRICE_ID</code> to{" "}
+        <code className="bg-paper-edge px-1 rounded">/api/webhooks/stripe</code> → sets{" "}
+        <code className="bg-paper-edge px-1 rounded">boostedUntil</code> on checkout completion.
+      </p>
+    </div>
   );
 }
