@@ -58,7 +58,7 @@ export default async function NewProjectPage({ searchParams }: Props) {
     const exists = await prisma.project.findUnique({ where: { slug: baseSlug }, select: { id: true } });
     const slug = exists ? `${baseSlug}-${Date.now().toString(36)}` : baseSlug;
 
-    await prisma.$transaction(async (tx) => {
+    const newProject = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
         data: {
           slug,
@@ -76,13 +76,26 @@ export default async function NewProjectPage({ searchParams }: Props) {
       });
 
       await tx.membership.create({
-        data: {
-          projectId: project.id,
-          userId: s.user.id,
-          role: "owner",
-        },
+        data: { projectId: project.id, userId: s.user.id, role: "owner" },
       });
+
+      return project;
     });
+
+    // Notify followers of the owner that they pinned a new project
+    const ownerFollowers = await prisma.userFollow.findMany({
+      where: { followingId: s.user.id },
+      select: { followerId: true },
+    });
+    if (ownerFollowers.length > 0) {
+      await prisma.notification.createMany({
+        data: ownerFollowers.map((f) => ({
+          userId: f.followerId,
+          kind: "new_project" as const,
+          projectId: newProject.id,
+        })),
+      });
+    }
 
     redirect(`/p/${slug}/dashboard`);
   }

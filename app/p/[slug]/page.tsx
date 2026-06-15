@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { LinkedText } from "@/components/SafeLink";
+import { FollowButton } from "@/components/FollowButton";
+import { ShareButtons } from "@/components/ShareButtons";
+import { getOrCreateProjectShortlink } from "@/lib/shortlink";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -24,6 +28,7 @@ async function getProject(slug: string) {
         orderBy: { publishedAt: "desc" },
         take: 5,
       },
+      _count: { select: { projectFollows: true } },
     },
   });
 }
@@ -39,14 +44,25 @@ export default async function ProjectPage({ params }: Props) {
     ? project.memberships.some((m) => m.userId === userId && m.user && (m as { role?: string }).role === "owner")
     : false;
 
-  const myApplicationRoleIds = userId
-    ? await prisma.application
-        .findMany({
-          where: { applicantId: userId, role: { projectId: project.id } },
-          select: { roleId: true },
-        })
-        .then((apps) => new Set(apps.map((a) => a.roleId)))
-    : new Set<string>();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://corkbored.com";
+  const [myApplicationRoleIds, isFollowingProject, shortCode] = await Promise.all([
+    userId
+      ? prisma.application
+          .findMany({
+            where: { applicantId: userId, role: { projectId: project.id } },
+            select: { roleId: true },
+          })
+          .then((apps) => new Set(apps.map((a) => a.roleId)))
+      : Promise.resolve(new Set<string>()),
+    userId && !isOwner
+      ? prisma.projectFollow
+          .findUnique({
+            where: { userId_projectId: { userId, projectId: project.id } },
+          })
+          .then((f) => !!f)
+      : Promise.resolve(false),
+    getOrCreateProjectShortlink(project.id),
+  ]);
 
   return (
     <>
@@ -81,14 +97,27 @@ export default async function ProjectPage({ params }: Props) {
                 github.com/{project.repoFullName}
               </p>
             </div>
-            {isOwner ? (
-              <Link
-                href={`/p/${slug}/dashboard`}
-                className="rounded-md bg-pin-teal px-4 py-2 font-mono text-sm text-white shadow-[0_2px_0_#0e5a47] hover:-translate-y-px"
-              >
-                Open dashboard
-              </Link>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <ShareButtons
+                shortUrl={`${appUrl}/${shortCode}`}
+                title={project.title}
+              />
+              {userId && !isOwner && (
+                <FollowButton
+                  endpoint={`/api/projects/${slug}/follow`}
+                  initialFollowing={isFollowingProject}
+                  initialCount={project._count.projectFollows}
+                />
+              )}
+              {isOwner && (
+                <Link
+                  href={`/p/${slug}/dashboard`}
+                  className="rounded-md bg-pin-teal px-4 py-2 font-mono text-sm text-white shadow-[0_2px_0_#0e5a47] hover:-translate-y-px"
+                >
+                  Open dashboard
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Pitch */}
@@ -196,29 +225,50 @@ export default async function ProjectPage({ params }: Props) {
                 Team
               </h2>
               <div className="divide-y divide-dashed divide-paper-edge">
-                {project.memberships.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center gap-3 py-2.5 text-sm"
-                  >
-                    <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-pin-gold text-xs font-semibold text-ink">
-                      {(m.user?.displayName ?? m.user?.githubLogin ?? "?")[0].toUpperCase()}
-                    </span>
-                    <div>
-                      <p className="font-medium text-ink">
-                        {m.user?.displayName ?? m.user?.githubLogin}
-                      </p>
-                      <p className="font-mono text-xs text-ink-soft">
-                        @{m.user?.githubLogin}
-                      </p>
+                {project.memberships.map((m) => {
+                  const name = m.user?.displayName ?? m.user?.githubLogin ?? "?";
+                  const login = m.user?.githubLogin;
+                  return (
+                    <div key={m.id} className="flex items-center gap-3 py-2.5 text-sm">
+                      {login ? (
+                        <Link href={`/u/${login}`} className="flex-shrink-0">
+                          {m.user?.avatarUrl ? (
+                            <Image
+                              src={m.user.avatarUrl}
+                              alt={name}
+                              width={28}
+                              height={28}
+                              className="rounded-full"
+                            />
+                          ) : (
+                            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-pin-gold text-xs font-semibold text-ink">
+                              {name[0].toUpperCase()}
+                            </span>
+                          )}
+                        </Link>
+                      ) : (
+                        <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-pin-gold text-xs font-semibold text-ink">
+                          {name[0].toUpperCase()}
+                        </span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        {login ? (
+                          <Link href={`/u/${login}`} className="font-medium text-ink hover:underline">
+                            {name}
+                          </Link>
+                        ) : (
+                          <p className="font-medium text-ink">{name}</p>
+                        )}
+                        <p className="font-mono text-xs text-ink-soft">@{login}</p>
+                      </div>
+                      {(m as { role?: string }).role === "owner" && (
+                        <span className="ml-auto rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.62rem] text-paper">
+                          owner
+                        </span>
+                      )}
                     </div>
-                    {(m as { role?: string }).role === "owner" && (
-                      <span className="ml-auto rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.62rem] text-paper">
-                        owner
-                      </span>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           </div>

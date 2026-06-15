@@ -77,14 +77,27 @@ export async function POST(
       return a;
     });
 
-    // Notify all active members (except the author)
-    const memberships = await prisma.membership.findMany({
-      where: { projectId: project.id, leftAt: null, userId: { not: user.id } },
-    });
-    if (memberships.length > 0) {
+    // Notify active members + project followers (except the author), deduplicated
+    const [memberships, followers] = await Promise.all([
+      prisma.membership.findMany({
+        where: { projectId: project.id, leftAt: null, userId: { not: user.id } },
+        select: { userId: true },
+      }),
+      prisma.projectFollow.findMany({
+        where: { projectId: project.id, userId: { not: user.id } },
+        select: { userId: true },
+      }),
+    ]);
+
+    const recipientIds = [...new Set([
+      ...memberships.map((m) => m.userId),
+      ...followers.map((f) => f.userId),
+    ])];
+
+    if (recipientIds.length > 0) {
       await prisma.notification.createMany({
-        data: memberships.map((m) => ({
-          userId: m.userId,
+        data: recipientIds.map((userId) => ({
+          userId,
           kind: "new_announcement" as const,
           projectId: project.id,
           announcementId: announcement.id,

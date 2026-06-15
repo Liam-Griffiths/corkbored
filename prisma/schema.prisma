@@ -73,12 +73,19 @@ enum NotificationKind {
   invite_accepted
   new_thread
   new_announcement
+  new_project
+  new_follower
 }
 
 enum ReportSubjectType {
   project
   application
   announcement
+}
+
+enum ShortLinkTarget {
+  project
+  user
 }
 
 enum ModerationVerdict {
@@ -163,6 +170,10 @@ model User {
   authoredMessages      Message[]        @relation("MessageAuthor")
   contributions         ContributionEvent[]
   chatMessages          ChatMessage[]
+  projectFollows        ProjectFollow[]
+  followers             UserFollow[]         @relation("Following")
+  following             UserFollow[]         @relation("Follower")
+  links                 UserLink[]
 }
 
 model UserSkill {
@@ -211,6 +222,7 @@ model Project {
   contributions ContributionEvent[]
   notifications Notification[]
   chatMessages  ChatMessage[]
+  projectFollows ProjectFollow[]
 
   @@index([moderationStatus, createdAt(sort: Desc)])
 }
@@ -413,4 +425,54 @@ model ChatMessage {
   user    User    @relation(fields: [userId], references: [id])
 
   @@index([projectId, createdAt(sort: Desc)])
+}
+
+model ProjectFollow {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+}
+
+model ShortLink {
+  code      String          @id
+  target    ShortLinkTarget
+  projectId String?
+  userId    String?
+  createdAt DateTime        @default(now())
+
+  @@index([target, projectId])
+  @@index([target, userId])
+}
+
+model UserLink {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String
+  url       String
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, position])
 }

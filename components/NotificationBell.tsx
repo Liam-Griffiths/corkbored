@@ -18,6 +18,8 @@ const KIND_TEXT: Record<string, string> = {
   invite_accepted: "Invite accepted",
   new_thread: "New discussion thread",
   new_announcement: "New project announcement",
+  new_project: "Someone you follow pinned a project",
+  new_follower: "Someone followed you",
 };
 
 export function NotificationBell({

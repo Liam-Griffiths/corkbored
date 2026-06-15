@@ -11,7 +11,7 @@ export default async function MePage() {
 
   const userId = session.user.id;
 
-  const [user, applications, memberships] = await Promise.all([
+  const [user, applications, memberships, links] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       include: { skills: true },
@@ -30,6 +30,10 @@ export default async function MePage() {
       include: {
         project: { select: { id: true, slug: true, title: true, stage: true } },
       },
+    }),
+    prisma.userLink.findMany({
+      where: { userId },
+      orderBy: { position: "asc" },
     }),
   ]);
 
@@ -67,6 +71,43 @@ export default async function MePage() {
     redir("/me");
   }
 
+  async function addLink(formData: FormData) {
+    "use server";
+    const s = await auth();
+    if (!s?.user?.id) return;
+
+    const label = (formData.get("label") as string)?.trim();
+    const url = (formData.get("url") as string)?.trim();
+    if (!label || !url) return;
+
+    let parsedUrl = url;
+    if (!/^https?:\/\//i.test(url)) parsedUrl = `https://${url}`;
+
+    const count = await prisma.userLink.count({ where: { userId: s.user.id } });
+    if (count >= 10) return;
+
+    await prisma.userLink.create({
+      data: { userId: s.user.id, label, url: parsedUrl, position: count },
+    });
+
+    const { redirect: redir } = await import("next/navigation");
+    redir("/me");
+  }
+
+  async function removeLink(formData: FormData) {
+    "use server";
+    const s = await auth();
+    if (!s?.user?.id) return;
+
+    const id = formData.get("id") as string;
+    if (!id) return;
+
+    await prisma.userLink.deleteMany({ where: { id, userId: s.user.id } });
+
+    const { redirect: redir } = await import("next/navigation");
+    redir("/me");
+  }
+
   const currentSkills = user.skills.map((s) => s.skill).join(", ");
 
   const APP_STATUS_STYLES: Record<string, string> = {
@@ -95,7 +136,7 @@ export default async function MePage() {
               className="h-16 w-16 rounded-full border-2 border-paper-edge"
             />
           )}
-          <div>
+          <div className="flex-1">
             <h1 className="font-display font-bold text-2xl text-ink">
               {user.displayName ?? user.githubLogin}
             </h1>
@@ -103,6 +144,14 @@ export default async function MePage() {
               @{user.githubLogin}
             </p>
           </div>
+          {user.githubLogin && (
+            <Link
+              href={`/u/${user.githubLogin}`}
+              className="font-mono text-xs text-ink-soft hover:text-ink border border-paper-edge rounded-md px-3 py-1.5"
+            >
+              View profile →
+            </Link>
+          )}
         </div>
 
         {/* Profile edit form */}
@@ -170,6 +219,61 @@ export default async function MePage() {
               Save
             </button>
           </form>
+        </section>
+
+        {/* My links */}
+        <section className="mb-8 rounded-sm bg-paper p-6 shadow-[0_14px_30px_rgba(0,0,0,.18)]">
+          <h2 className="font-display font-semibold text-lg text-ink mb-1">My links</h2>
+          <p className="font-mono text-xs text-ink-soft mb-4">Show on your public profile. Up to 10 links.</p>
+
+          {links.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {links.map((link) => (
+                <div key={link.id} className="flex items-center gap-3 rounded-md border border-paper-edge px-3 py-2">
+                  <a
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 font-mono text-sm text-ink hover:underline truncate"
+                  >
+                    <span className="font-semibold">{link.label}</span>
+                    <span className="ml-2 text-ink-soft text-xs">{link.url}</span>
+                  </a>
+                  <form action={removeLink}>
+                    <input type="hidden" name="id" value={link.id} />
+                    <button type="submit" className="font-mono text-xs text-ink-soft hover:text-pin-red">
+                      remove
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {links.length < 10 && (
+            <form action={addLink} className="flex flex-wrap gap-2">
+              <input
+                name="label"
+                required
+                maxLength={40}
+                placeholder="Label (e.g. Twitter)"
+                className="rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold w-36"
+              />
+              <input
+                name="url"
+                required
+                maxLength={300}
+                placeholder="https://..."
+                className="flex-1 min-w-40 rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
+              />
+              <button
+                type="submit"
+                className="rounded-md bg-pin-red px-4 py-2 font-mono text-sm font-medium text-white shadow-[0_2px_0_#7c2d14] hover:-translate-y-px"
+              >
+                Add
+              </button>
+            </form>
+          )}
         </section>
 
         {/* My memberships */}
