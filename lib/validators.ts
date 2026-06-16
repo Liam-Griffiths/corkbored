@@ -12,6 +12,7 @@ export const PatchProjectSchema = z.object({
   title: z.string().min(1).max(80).optional(),
   pitch: z.string().max(280).optional(),
   stage: z.enum(["building", "prototype", "launched"]).optional(),
+  overview: z.string().max(20000).nullable().optional(),
   tags: z.array(z.string().min(1).max(30)).min(1).max(6).optional(),
 });
 

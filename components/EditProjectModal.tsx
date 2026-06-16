@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 type Stage = "building" | "prototype" | "launched";
 
@@ -17,12 +18,14 @@ export function EditProjectModal({
   initialPitch,
   initialStage,
   initialTags,
+  initialOverview,
 }: {
   slug: string;
   initialTitle: string;
   initialPitch: string;
   initialStage: Stage;
   initialTags: string[];
+  initialOverview: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -30,6 +33,7 @@ export function EditProjectModal({
   const [pitch, setPitch] = useState(initialPitch);
   const [stage, setStage] = useState<Stage>(initialStage);
   const [tags, setTags] = useState<string[]>(initialTags);
+  const [overview, setOverview] = useState(initialOverview);
   const [tagInput, setTagInput] = useState("");
   const [suggestions, setSuggestions] = useState<{ slug: string; label: string; count: number }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -43,10 +47,11 @@ export function EditProjectModal({
       setPitch(initialPitch);
       setStage(initialStage);
       setTags(initialTags);
+      setOverview(initialOverview);
       setTagInput("");
       setError(null);
     }
-  }, [open, initialTitle, initialPitch, initialStage, initialTags]);
+  }, [open, initialTitle, initialPitch, initialStage, initialTags, initialOverview]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -90,7 +95,7 @@ export function EditProjectModal({
       const res = await fetch(`/api/projects/${slug}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), pitch: pitch.trim(), stage, tags }),
+        body: JSON.stringify({ title: title.trim(), pitch: pitch.trim(), stage, tags, overview: overview.trim() || null }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -165,6 +170,18 @@ export function EditProjectModal({
                   className="w-full resize-y rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
                 />
                 <p className="mt-1 text-right font-mono text-[0.6rem] text-ink-soft">{pitch.length}/280</p>
+              </div>
+
+              {/* Overview / about (markdown) */}
+              <div>
+                <label className="mb-1.5 block font-mono text-[0.65rem] uppercase tracking-widest text-ink-soft">About (markdown, optional)</label>
+                <MarkdownEditor
+                  value={overview}
+                  onChange={setOverview}
+                  rows={8}
+                  maxLength={20000}
+                  placeholder="A longer write-up shown on the public project page…"
+                />
               </div>
 
               {/* Stage */}

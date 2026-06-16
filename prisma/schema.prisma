@@ -211,6 +211,7 @@ model Project {
   repoFullName     String
   stage            ProjectStage     @default(building)
   moderationStatus ModerationStatus @default(published)
+  overview         String?          @db.Text
   license          String?
   defaultBranch    String           @default("main")
   ownerId          String

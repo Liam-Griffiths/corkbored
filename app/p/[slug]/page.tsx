@@ -4,6 +4,7 @@ import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { summaryOf } from "@/lib/text";
+import { Markdown } from "@/components/Markdown";
 import { ChatPanel } from "@/components/ChatPanel";
 
 const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
@@ -186,6 +187,16 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           <p className="font-mono text-[0.68rem] uppercase tracking-widest text-ink-soft">open roles</p>
         </div>
       </div>
+
+      {/* About — optional markdown write-up */}
+      {project.overview?.trim() && (
+        <section>
+          <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-ink-soft">About</h2>
+          <div className="rounded-lg border border-paper-edge bg-paper p-5">
+            <Markdown>{project.overview}</Markdown>
+          </div>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-[1.4fr_1fr]">
         {/* Open roles */}

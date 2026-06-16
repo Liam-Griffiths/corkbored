@@ -38,6 +38,7 @@ export default async function ProjectLayout({
         pitch: true,
         moderationStatus: true,
         repoFullName: true,
+        overview: true,
         tags: { where: { tag: { status: "active" } }, include: { tag: true } },
         _count: { select: { projectFollows: true } },
       },
@@ -109,6 +110,7 @@ export default async function ProjectLayout({
                     initialPitch={project.pitch ?? ""}
                     initialStage={project.stage as "building" | "prototype" | "launched"}
                     initialTags={project.tags.map((t) => t.tag.label)}
+                    initialOverview={project.overview ?? ""}
                   />
                 )}
               </div>
