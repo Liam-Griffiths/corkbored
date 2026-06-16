@@ -30,6 +30,7 @@ export const PatchApplicationSchema = z.object({
 
 export const CreateAnnouncementSchema = z.object({
   title: z.string().min(1).max(120),
+  summary: z.string().max(280).optional(),
   body: z.string().min(1).max(5000),
   kind: z.enum(["update", "release", "roles_open", "milestone"]),
 });

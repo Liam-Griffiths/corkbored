@@ -54,6 +54,7 @@ export async function POST(
           projectId: project.id,
           authorId: user.id,
           title: body.title,
+          summary: body.summary?.trim() || null,
           body: body.body,
           kind: body.kind,
           publishedAt: new Date(),

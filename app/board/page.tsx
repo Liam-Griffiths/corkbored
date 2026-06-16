@@ -4,6 +4,7 @@ import { BoardQuerySchema } from "@/lib/validators";
 import { Header } from "@/components/Header";
 import { ReportTagButton } from "@/components/ReportTagButton";
 import { getPopularTags } from "@/lib/tags";
+import { summaryOf } from "@/lib/text";
 import { auth } from "@/lib/auth";
 
 interface Props {
@@ -249,13 +250,14 @@ export default async function BoardPage({ searchParams }: Props) {
               {announcements.map((a) => (
                 <Link
                   key={a.id}
-                  href={`/p/${a.project.slug}`}
+                  href={`/p/${a.project.slug}/announcements/${a.id}`}
                   className="flex-shrink-0 max-w-[280px] rounded-lg border border-ink/14 bg-ink/5 px-4 py-3 hover:bg-ink/8"
                 >
                   <p className="mb-1 font-mono text-[0.64rem] text-pin-gold">
                     {a.project.slug} · {a.kind.replace("_", " ")}
                   </p>
                   <p className="text-sm font-semibold text-ink">{a.title}</p>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-ink/70">{summaryOf(a)}</p>
                 </Link>
               ))}
             </div>

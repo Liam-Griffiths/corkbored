@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
-import { LinkedText } from "@/components/SafeLink";
+import { summaryOf } from "@/lib/text";
 import { ChatPanel } from "@/components/ChatPanel";
 
 const CHAT_ENABLED = process.env.CHAT_ENABLED === "true";
@@ -153,10 +153,10 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
               </div>
               <div className="space-y-2">
                 {project.announcements.slice(0, 2).map((a) => (
-                  <div key={a.id} className="rounded-sm border border-paper-edge bg-paper p-3">
+                  <Link key={a.id} href={`/p/${slug}/announcements/${a.id}`} className="block rounded-sm border border-paper-edge bg-paper p-3 hover:border-ink-soft">
                     <p className="text-sm font-semibold text-ink">{a.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-ink/70"><LinkedText text={a.body} /></p>
-                  </div>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-ink/70">{summaryOf(a)}</p>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -289,15 +289,15 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           </div>
           <div className="space-y-3">
             {project.announcements.slice(0, 3).map((a) => (
-              <div key={a.id} className="rounded-lg border border-paper-edge bg-paper p-4">
+              <Link key={a.id} href={`/p/${slug}/announcements/${a.id}`} className="block rounded-lg border border-paper-edge bg-paper p-4 hover:border-ink-soft">
                 <div className="mb-1 flex items-center gap-2">
                   <span className="text-sm font-semibold text-ink">{a.title}</span>
                   <span className="rounded-full bg-paper-edge px-2 py-0.5 font-mono text-[0.6rem] text-ink-soft">
                     {KIND_LABELS[a.kind] ?? a.kind}
                   </span>
                 </div>
-                <p className="line-clamp-2 text-sm text-ink/75"><LinkedText text={a.body} /></p>
-              </div>
+                <p className="line-clamp-2 text-sm text-ink/75">{summaryOf(a)}</p>
+              </Link>
             ))}
           </div>
         </section>
