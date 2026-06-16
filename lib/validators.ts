@@ -49,8 +49,14 @@ export const PatchTaskSchema = z.object({
 });
 
 export const CreateMessageSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
   body: z.string().min(1).max(5000),
   parentId: z.string().optional(),
+});
+
+export const PatchMessageSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  body: z.string().min(1).max(5000).optional(),
 });
 
 export const CreateEventSchema = z.object({

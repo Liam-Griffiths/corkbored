@@ -179,6 +179,7 @@ model User {
   following             UserFollow[]         @relation("Follower")
   links                 UserLink[]
   createdEvents         Event[]              @relation("EventCreator")
+  postVotes             PostVote[]
 }
 
 model UserSkill {
@@ -375,7 +376,10 @@ model Message {
   projectId String
   authorId  String
   parentId  String?
+  title     String?
   body      String    @db.Text
+  pinnedAt  DateTime?
+  editedAt  DateTime?
   deletedAt DateTime?
   createdAt DateTime  @default(now())
 
@@ -383,8 +387,21 @@ model Message {
   author  User      @relation("MessageAuthor", fields: [authorId], references: [id])
   parent  Message?  @relation("ThreadReplies", fields: [parentId], references: [id])
   replies Message[] @relation("ThreadReplies")
+  votes   PostVote[]
 
   @@index([projectId, parentId, createdAt])
+}
+
+model PostVote {
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([messageId])
 }
 
 model Announcement {

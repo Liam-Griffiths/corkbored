@@ -71,6 +71,11 @@ export async function POST(
 
     const body = CreateMessageSchema.parse(await req.json());
 
+    // Root threads need a title; replies must not carry one.
+    if (!body.parentId && !body.title?.trim()) {
+      return Response.json({ error: "Thread title required" }, { status: 422 });
+    }
+
     // Enforce one level of threading: parentId must reference a root message
     if (body.parentId) {
       const parent = await prisma.message.findUnique({
@@ -92,6 +97,7 @@ export async function POST(
       data: {
         projectId: project.id,
         authorId: user.id,
+        title: body.parentId ? null : body.title!.trim(),
         body: body.body,
         parentId: body.parentId ?? null,
       },
