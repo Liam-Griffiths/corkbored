@@ -178,6 +178,7 @@ model User {
   followers             UserFollow[]         @relation("Following")
   following             UserFollow[]         @relation("Follower")
   links                 UserLink[]
+  createdEvents         Event[]              @relation("EventCreator")
 }
 
 model UserSkill {
@@ -227,8 +228,28 @@ model Project {
   notifications Notification[]
   chatMessages  ChatMessage[]
   projectFollows ProjectFollow[]
+  events        Event[]
 
   @@index([moderationStatus, createdAt(sort: Desc)])
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  projectId   String
+  createdById String
+  title       String
+  description String?   @db.Text
+  location    String?
+  startAt     DateTime
+  endAt       DateTime?
+  allDay      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("EventCreator", fields: [createdById], references: [id])
+
+  @@index([projectId, startAt])
 }
 
 model Tag {

@@ -34,6 +34,7 @@ export function ProjectTabs({
     ...(isMember
       ? ([
           { href: `/p/${slug}/tasks`, label: "Tasks", group: "member" },
+          { href: `/p/${slug}/calendar`, label: "Calendar", group: "member" },
           { href: `/p/${slug}/discussion`, label: "Discussion", group: "member" },
           ...(chatEnabled
             ? [{ href: `/p/${slug}/chat`, label: "Chat", group: "member" as const }]

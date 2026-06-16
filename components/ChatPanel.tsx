@@ -472,7 +472,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                         <span className="h-px flex-1 bg-paper-edge" />
                       </div>
                     )}
-                  <div className={grouped ? "pl-8" : "flex gap-2.5"}>
+                  <div className={grouped ? "pl-[38px]" : "flex gap-2.5"}>
                     {!grouped && (
                       <span className="flex-shrink-0 mt-0.5">
                         {msg.user.avatarUrl ? (

@@ -53,6 +53,17 @@ export const CreateMessageSchema = z.object({
   parentId: z.string().optional(),
 });
 
+export const CreateEventSchema = z.object({
+  title: z.string().min(1).max(120),
+  description: z.string().max(2000).optional(),
+  location: z.string().max(200).optional(),
+  startAt: z.string().datetime({ offset: true }),
+  endAt: z.string().datetime({ offset: true }).optional().nullable(),
+  allDay: z.boolean().optional(),
+});
+
+export const PatchEventSchema = CreateEventSchema.partial();
+
 export const CreateReportSchema = z.object({
   subjectType: z.enum(["project", "application", "announcement", "tag"]),
   subjectId: z.string(),
