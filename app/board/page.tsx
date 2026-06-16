@@ -1,8 +1,9 @@
-import { Suspense } from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { BoardQuerySchema } from "@/lib/validators";
 import { Header } from "@/components/Header";
+import { ReportTagButton } from "@/components/ReportTagButton";
+import { getPopularTags } from "@/lib/tags";
 import { auth } from "@/lib/auth";
 
 interface Props {
@@ -14,7 +15,10 @@ const BOOST_ENABLED = process.env.BOOST_ENABLED === "true";
 function findProjects(args: Parameters<typeof prisma.project.findMany>[0]) {
   return prisma.project.findMany({
     ...args,
-    include: { tags: true, roles: { where: { status: "open" } } },
+    include: {
+      tags: { where: { tag: { status: "active" } }, include: { tag: true } },
+      roles: { where: { status: "open" } },
+    },
   });
 }
 type BoardProject = Awaited<ReturnType<typeof findProjects>>[number];
@@ -32,7 +36,7 @@ async function getBoard(query: {
   const where = {
     moderationStatus: "published" as const,
     ...(query.stage ? { stage: query.stage as never } : {}),
-    ...(query.tag ? { tags: { some: { tag: query.tag } } } : {}),
+    ...(query.tag ? { tags: { some: { tag: { slug: query.tag } } } } : {}),
     ...(query.q
       ? {
           OR: [
@@ -135,9 +139,18 @@ export default async function BoardPage({ searchParams }: Props) {
       })
     : [];
 
-  const allTags = [
-    ...new Set(projects.flatMap((p) => p.tags.map((t) => t.tag))),
-  ].sort();
+  const popularTags = await getPopularTags();
+  // When filtering by a tag that isn't in the popular set, surface it as a chip too.
+  const activeTag = params.tag
+    ? (popularTags.find((t) => t.slug === params.tag) ??
+        (await prisma.tag.findUnique({
+          where: { slug: params.tag },
+          select: { id: true, slug: true, label: true },
+        })))
+    : null;
+  const tagChips = activeTag && !popularTags.some((t) => t.slug === activeTag.slug)
+    ? [activeTag, ...popularTags]
+    : popularTags;
 
   return (
     <>
@@ -205,8 +218,8 @@ export default async function BoardPage({ searchParams }: Props) {
                     </h3>
                     <div className="mb-3 flex flex-wrap gap-1.5">
                       {project.tags.map((t) => (
-                        <span key={t.tag} className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">
-                          {t.tag}
+                        <span key={t.tag.slug} className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">
+                          {t.tag.label}
                         </span>
                       ))}
                       <span className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">
@@ -275,14 +288,17 @@ export default async function BoardPage({ searchParams }: Props) {
         {/* Filters */}
         <div className="mb-6 flex flex-wrap gap-2">
           <FilterChip href={`/board${buildQuery({ sort: params.sort })}`} active={!params.tag && !params.stage && !params.q} label="all" />
-          {allTags.map((tag) => (
+          {tagChips.map((tag) => (
             <FilterChip
-              key={tag}
-              href={`/board${buildQuery({ ...params, tag })}`}
-              active={params.tag === tag}
-              label={tag}
+              key={tag.slug}
+              href={`/board${buildQuery({ ...params, tag: tag.slug })}`}
+              active={params.tag === tag.slug}
+              label={tag.label}
             />
           ))}
+          {activeTag && (
+            <ReportTagButton tagId={activeTag.id} label={activeTag.label} />
+          )}
           {(["building", "prototype", "launched"] as const).map((s) => (
             <FilterChip
               key={s}
@@ -336,10 +352,10 @@ export default async function BoardPage({ searchParams }: Props) {
                   <div className="mb-3 flex flex-wrap gap-1.5">
                     {project.tags.map((t) => (
                       <span
-                        key={t.tag}
+                        key={t.tag.slug}
                         className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft"
                       >
-                        {t.tag}
+                        {t.tag.label}
                       </span>
                     ))}
                     <span className="rounded-sm bg-paper-edge px-1.5 py-0.5 font-mono text-[0.64rem] text-ink-soft">

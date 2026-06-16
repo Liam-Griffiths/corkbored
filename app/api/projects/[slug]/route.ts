@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireProjectOwner } from "@/lib/authz";
 import { PatchProjectSchema } from "@/lib/validators";
+import { upsertTagsByLabel } from "@/lib/tags";
 import { apiError } from "@/lib/api";
 
 export async function PATCH(
@@ -28,10 +29,11 @@ export async function PATCH(
         await tx.project.update({ where: { id: project.id }, data: fields });
       }
       if (tags) {
-        const normalized = Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean)));
+        const tagIds = await upsertTagsByLabel(tx, tags);
         await tx.projectTag.deleteMany({ where: { projectId: project.id } });
         await tx.projectTag.createMany({
-          data: normalized.map((tag) => ({ projectId: project.id, tag })),
+          data: tagIds.map((tagId) => ({ projectId: project.id, tagId })),
+          skipDuplicates: true,
         });
       }
     });

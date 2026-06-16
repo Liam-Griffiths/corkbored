@@ -31,6 +31,7 @@ export function EditProjectModal({
   const [stage, setStage] = useState<Stage>(initialStage);
   const [tags, setTags] = useState<string[]>(initialTags);
   const [tagInput, setTagInput] = useState("");
+  const [suggestions, setSuggestions] = useState<{ slug: string; label: string; count: number }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,20 @@ export function EditProjectModal({
     if (open) window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // Debounced tag autocomplete against the popularity-ranked search endpoint.
+  useEffect(() => {
+    const q = tagInput.trim();
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      if (!q) { setSuggestions([]); return; }
+      try {
+        const res = await fetch(`/api/tags?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
+        if (res.ok) setSuggestions(await res.json());
+      } catch { /* aborted or offline */ }
+    }, 200);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [tagInput]);
 
   function addTag(raw: string) {
     const tag = raw.trim().toLowerCase().replace(/[^a-z0-9.+#-]/g, "");
@@ -184,17 +199,36 @@ export function EditProjectModal({
                   ))}
                 </div>
                 {tags.length < 6 && (
-                  <input
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
-                    }}
-                    onBlur={() => { if (tagInput) addTag(tagInput); }}
-                    placeholder="Add a skill, press Enter"
-                    maxLength={30}
-                    className="w-52 rounded-md border border-paper-edge bg-paper-bright px-2.5 py-1.5 font-mono text-xs text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
-                  />
+                  <div className="relative w-52">
+                    <input
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); }
+                      }}
+                      onBlur={() => { if (tagInput) addTag(tagInput); }}
+                      placeholder="Add a skill, press Enter"
+                      maxLength={30}
+                      className="w-full rounded-md border border-paper-edge bg-paper-bright px-2.5 py-1.5 font-mono text-xs text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
+                    />
+                    {suggestions.filter((s) => !tags.includes(s.slug)).length > 0 && (
+                      <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-md border border-paper-edge bg-paper-bright shadow-[0_8px_18px_rgba(0,0,0,.18)]">
+                        {suggestions.filter((s) => !tags.includes(s.slug)).map((s) => (
+                          <li key={s.slug}>
+                            <button
+                              type="button"
+                              // onMouseDown so it fires before the input's onBlur
+                              onMouseDown={(e) => { e.preventDefault(); addTag(s.slug); }}
+                              className="flex w-full items-center justify-between px-2.5 py-1.5 text-left font-mono text-xs text-ink hover:bg-paper-edge"
+                            >
+                              <span>{s.label}</span>
+                              <span className="text-[0.6rem] text-ink-soft">{s.count}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </div>
 

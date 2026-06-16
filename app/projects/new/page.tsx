@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { verifyRepoForUser } from "@/lib/github";
+import { upsertTagsByLabel, getPopularTags } from "@/lib/tags";
 import { Header } from "@/components/Header";
 
 interface Props {
@@ -59,6 +60,7 @@ export default async function NewProjectPage({ searchParams }: Props) {
     const slug = exists ? `${baseSlug}-${Date.now().toString(36)}` : baseSlug;
 
     const newProject = await prisma.$transaction(async (tx) => {
+      const tagIds = await upsertTagsByLabel(tx, tagsRaw);
       const project = await tx.project.create({
         data: {
           slug,
@@ -70,7 +72,7 @@ export default async function NewProjectPage({ searchParams }: Props) {
           defaultBranch: verify.defaultBranch,
           license: verify.license,
           ownerId: s.user.id,
-          tags: { create: tagsRaw.map((tag) => ({ tag })) },
+          tags: { create: tagIds.map((tagId) => ({ tagId })) },
           roles: { create: roleInputs },
         },
       });
@@ -99,6 +101,8 @@ export default async function NewProjectPage({ searchParams }: Props) {
 
     redirect(`/p/${slug}/dashboard`);
   }
+
+  const popularTags = await getPopularTags();
 
   const errorMessages: Record<string, string> = {
     missing_fields: "Please fill in all required fields and add at least one role.",
@@ -197,9 +201,15 @@ export default async function NewProjectPage({ searchParams }: Props) {
                 <input
                   id="tags"
                   name="tags"
+                  list="tag-suggestions"
                   placeholder="e.g. typescript, rust, postgres"
                   className="w-full rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-mono text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
                 />
+                <datalist id="tag-suggestions">
+                  {popularTags.map((t) => (
+                    <option key={t.slug} value={t.slug} />
+                  ))}
+                </datalist>
                 <p className="mt-1 font-mono text-[0.7rem] text-ink-soft">Comma-separated · up to 10</p>
               </div>
             </div>

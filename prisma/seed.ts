@@ -1,6 +1,12 @@
 import "dotenv/config";
 import { prisma } from "../lib/db";
 
+// Nested ProjectTag create that upserts the canonical Tag by slug.
+function tagLink(label: string) {
+  const slug = label.trim().toLowerCase().replace(/[^a-z0-9.+#-]/g, "");
+  return { tag: { connectOrCreate: { where: { slug }, create: { slug, label } } } };
+}
+
 async function main() {
   // ── Users ──────────────────────────────────────────────────────────────────
   const mira = await prisma.user.upsert({
@@ -82,7 +88,7 @@ async function main() {
       repoFullName: "mira/ledgerline",
       stage: "launched",
       ownerId: mira.id,
-      tags: { create: [{ tag: "TypeScript" }, { tag: "Postgres" }] },
+      tags: { create: [tagLink("TypeScript"), tagLink("Postgres")] },
     },
   });
 
@@ -98,7 +104,7 @@ async function main() {
       repoFullName: "dev-sara/trailcache",
       stage: "building",
       ownerId: sara.id,
-      tags: { create: [{ tag: "Rust" }, { tag: "React Native" }] },
+      tags: { create: [tagLink("Rust"), tagLink("React Native")] },
     },
   });
 
@@ -114,7 +120,7 @@ async function main() {
       repoFullName: "jq-dev/promptpit",
       stage: "prototype",
       ownerId: jq.id,
-      tags: { create: [{ tag: "Python" }, { tag: "SQLite" }] },
+      tags: { create: [tagLink("Python"), tagLink("SQLite")] },
     },
   });
 
@@ -130,7 +136,7 @@ async function main() {
       repoFullName: "noiseboy/patchbay",
       stage: "building",
       ownerId: noah.id,
-      tags: { create: [{ tag: "TypeScript" }, { tag: "WebAudio" }] },
+      tags: { create: [tagLink("TypeScript"), tagLink("WebAudio")] },
     },
   });
 

@@ -38,7 +38,7 @@ export default async function ProjectLayout({
         pitch: true,
         moderationStatus: true,
         repoFullName: true,
-        tags: true,
+        tags: { where: { tag: { status: "active" } }, include: { tag: true } },
         _count: { select: { projectFollows: true } },
       },
     }),
@@ -108,7 +108,7 @@ export default async function ProjectLayout({
                     initialTitle={project.title}
                     initialPitch={project.pitch ?? ""}
                     initialStage={project.stage as "building" | "prototype" | "launched"}
-                    initialTags={project.tags.map((t) => t.tag)}
+                    initialTags={project.tags.map((t) => t.tag.label)}
                   />
                 )}
               </div>
@@ -143,8 +143,8 @@ export default async function ProjectLayout({
           {project.tags.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-1.5">
               {project.tags.map((t) => (
-                <span key={t.tag} className="rounded-sm bg-paper-edge px-2 py-0.5 font-mono text-[0.68rem] text-ink-soft">
-                  {t.tag}
+                <span key={t.tag.slug} className="rounded-sm bg-paper-edge px-2 py-0.5 font-mono text-[0.68rem] text-ink-soft">
+                  {t.tag.label}
                 </span>
               ))}
             </div>

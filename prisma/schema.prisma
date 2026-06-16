@@ -83,6 +83,7 @@ enum ReportSubjectType {
   project
   application
   announcement
+  tag
 }
 
 enum ShortLinkTarget {
@@ -230,14 +231,32 @@ model Project {
   @@index([moderationStatus, createdAt(sort: Desc)])
 }
 
+model Tag {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  label     String
+  status    TagStatus @default(active)
+  createdAt DateTime  @default(now())
+
+  projects ProjectTag[]
+
+  @@index([status])
+}
+
 model ProjectTag {
   projectId String
-  tag       String
+  tagId     String
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
-  @@id([projectId, tag])
-  @@index([tag])
+  @@id([projectId, tagId])
+  @@index([tagId])
+}
+
+enum TagStatus {
+  active
+  hidden
 }
 
 model Role {

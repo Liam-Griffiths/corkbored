@@ -54,7 +54,7 @@ export const CreateMessageSchema = z.object({
 });
 
 export const CreateReportSchema = z.object({
-  subjectType: z.enum(["project", "application", "announcement"]),
+  subjectType: z.enum(["project", "application", "announcement", "tag"]),
   subjectId: z.string(),
   reason: z.string().min(10).max(500),
 });
