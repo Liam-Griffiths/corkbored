@@ -29,6 +29,40 @@ interface Props {
   fullHeight?: boolean;
 }
 
+function startOfDay(iso: string): number {
+  const d = new Date(iso);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+function sameDay(a: string, b: string): boolean {
+  return startOfDay(a) === startOfDay(b);
+}
+
+// Adaptive poll cadence: fast during active conversation, backing off as the
+// chat goes quiet, then stopping entirely (manual refresh) once it's idle for
+// an hour — so a forgotten open tab doesn't poll forever.
+function pollDelay(idleMs: number): number | null {
+  if (idleMs < 60_000) return 3_000; // < 1 min: live
+  if (idleMs < 5 * 60_000) return 10_000; // < 5 min
+  if (idleMs < 15 * 60_000) return 30_000; // < 15 min
+  if (idleMs < 30 * 60_000) return 60_000; // < 30 min
+  if (idleMs < 60 * 60_000) return 300_000; // < 60 min
+  return null; // idle ≥ 1 hr: stop, require manual refresh
+}
+
+function dayLabel(iso: string): string {
+  const diffDays = Math.round((startOfDay(new Date().toISOString()) - startOfDay(iso)) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  const d = new Date(iso);
+  return d.toLocaleDateString([], {
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+    ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}),
+  });
+}
+
 export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -38,6 +72,13 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
   const [visible, setVisible] = useState(true);
   const [hasMore, setHasMore] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [pollPaused, setPollPaused] = useState(false);
+  const lastActivityRef = useRef<number>(0);
+  const lastPresenceRef = useRef<number>(0);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumePollRef = useRef<(() => void) | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sinceRef = useRef<string | null>(null);
@@ -78,7 +119,10 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
         setMessages((prev) => {
           const seen = new Set(prev.map((m) => m.id));
           const fresh = data.messages.filter((m) => !seen.has(m.id));
-          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          if (fresh.length === 0) return prev;
+          // New traffic — reset the backoff so polling stays live.
+          lastActivityRef.current = Date.now();
+          return [...prev, ...fresh];
         });
         sinceRef.current = data.messages[data.messages.length - 1].createdAt;
       }
@@ -139,16 +183,73 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
     await fetch(`/api/projects/${slug}/presence`, { method: "POST" }).catch(() => {});
   }, [slug]);
 
-  // Polling transport
+  // Polling transport — adaptive cadence that backs off as the chat goes quiet
+  // and stops once idle, falling back to a manual refresh button.
   useEffect(() => {
     if (transport !== "polling") return;
+    let cancelled = false;
+
+    function clearTimer() {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    }
+
+    // Presence keeps you "online"; ping at most every 30s regardless of cadence.
+    function maybePing() {
+      if (Date.now() - lastPresenceRef.current >= 30_000) {
+        lastPresenceRef.current = Date.now();
+        pingPresence();
+      }
+    }
+
+    function schedule() {
+      clearTimer();
+      if (cancelled) return;
+      const delay = document.hidden ? null : pollDelay(Date.now() - lastActivityRef.current);
+      if (delay == null) {
+        setPollPaused(true); // idle or hidden — stop until the user acts
+        return;
+      }
+      setPollPaused(false);
+      pollTimerRef.current = setTimeout(async () => {
+        await fetchMessages(false);
+        maybePing();
+        schedule();
+      }, delay);
+    }
+
+    function resume() {
+      if (cancelled) return;
+      lastActivityRef.current = Date.now();
+      setPollPaused(false);
+      clearTimer();
+      fetchMessages(false).finally(() => { maybePing(); schedule(); });
+    }
+    resumePollRef.current = resume;
+
+    function onVisibility() {
+      if (document.hidden) {
+        clearTimer();
+        setPollPaused(true);
+      } else {
+        resume();
+      }
+    }
+
+    // Initial load
+    lastActivityRef.current = Date.now();
     fetchMessages(true);
-    pingPresence();
-    const msgInterval = setInterval(() => fetchMessages(false), 4000);
-    const presenceInterval = setInterval(pingPresence, 30_000);
+    maybePing();
+    schedule();
+    document.addEventListener("visibilitychange", onVisibility);
+
     return () => {
-      clearInterval(msgInterval);
-      clearInterval(presenceInterval);
+      cancelled = true;
+      clearTimer();
+      resumePollRef.current = null;
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [transport, fetchMessages, pingPresence]);
 
@@ -245,6 +346,43 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
     } finally {
       setSending(false);
       inputRef.current?.focus();
+      // Sending is activity — snap polling back to live cadence.
+      resumePollRef.current?.();
+    }
+  }
+
+  function startEdit(msg: ChatMessage) {
+    setEditingId(msg.id);
+    setEditDraft(msg.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft("");
+  }
+
+  async function saveEdit(id: string) {
+    const body = editDraft.trim();
+    if (!body) return;
+    const original = messages.find((m) => m.id === id);
+    if (original && body === original.body) { cancelEdit(); return; }
+    cancelEdit();
+    const res = await fetch(`/api/projects/${slug}/chat/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, body: updated.body } : m)));
+    }
+  }
+
+  async function deleteMessage(id: string) {
+    if (!window.confirm("Delete this message?")) return;
+    const res = await fetch(`/api/projects/${slug}/chat/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== id));
     }
   }
 
@@ -320,10 +458,21 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
               )}
               {messages.map((msg, i) => {
                 const prev = messages[i - 1];
-                const grouped = prev?.user.id === msg.user.id;
+                const newDay = !prev || !sameDay(prev.createdAt, msg.createdAt);
+                const grouped = !newDay && prev?.user.id === msg.user.id;
                 const isOwn = msg.user.id === currentUserId;
                 return (
-                  <div key={msg.id} className={grouped ? "pl-8" : "flex gap-2.5"}>
+                  <div key={msg.id}>
+                    {newDay && (
+                      <div className="flex items-center gap-3 py-1.5">
+                        <span className="h-px flex-1 bg-paper-edge" />
+                        <span className="font-mono text-[0.6rem] uppercase tracking-widest text-ink-soft">
+                          {dayLabel(msg.createdAt)}
+                        </span>
+                        <span className="h-px flex-1 bg-paper-edge" />
+                      </div>
+                    )}
+                  <div className={grouped ? "pl-8" : "flex gap-2.5"}>
                     {!grouped && (
                       <span className="flex-shrink-0 mt-0.5">
                         {msg.user.avatarUrl ? (
@@ -352,8 +501,39 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                           </span>
                         </div>
                       )}
-                      <p className="text-sm text-ink leading-relaxed break-words">{msg.body}</p>
+                      {editingId === msg.id ? (
+                        <div className="mt-0.5">
+                          <textarea
+                            value={editDraft}
+                            autoFocus
+                            onChange={(e) => setEditDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(msg.id); }
+                              if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
+                            }}
+                            rows={2}
+                            maxLength={2000}
+                            className="w-full resize-none rounded-md border border-paper-edge bg-paper-bright px-2.5 py-1.5 font-sans text-sm text-ink focus:outline-2 focus:outline-pin-gold"
+                          />
+                          <div className="mt-1 flex gap-2 font-mono text-[0.65rem] text-ink-soft">
+                            <button onClick={() => saveEdit(msg.id)} className="text-pin-teal hover:underline">save</button>
+                            <button onClick={cancelEdit} className="hover:text-ink">cancel</button>
+                            <span>· ↵ to save, esc to cancel</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="group/msg relative">
+                          <p className="text-sm text-ink leading-relaxed break-words">{msg.body}</p>
+                          {isOwn && (
+                            <div className="absolute -top-1 right-0 hidden gap-1.5 rounded-sm border border-paper-edge bg-paper px-1.5 py-0.5 font-mono text-[0.6rem] text-ink-soft shadow-sm group-hover/msg:flex">
+                              <button onClick={() => startEdit(msg)} className="hover:text-ink">edit</button>
+                              <button onClick={() => deleteMessage(msg.id)} className="hover:text-pin-red">delete</button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
+                  </div>
                   </div>
                 );
               })}
@@ -368,6 +548,19 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
               </div>
             )}
 
+            {/* Polling paused — chat went idle (or tab hidden); offer manual refresh */}
+            {transport === "polling" && pollPaused && (
+              <div className="flex items-center justify-center gap-2 border-t border-paper-edge bg-board px-4 py-1.5 font-mono text-[0.68rem] text-ink-soft">
+                <span>Live updates paused</span>
+                <button
+                  onClick={() => resumePollRef.current?.()}
+                  className="rounded-sm border border-paper-edge px-2 py-0.5 text-ink hover:border-ink-soft"
+                >
+                  ↻ refresh
+                </button>
+              </div>
+            )}
+
             {/* Input */}
             <div className="border-t border-paper-edge px-4 py-3">
               <div className="flex gap-2 items-end">
@@ -376,6 +569,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                   value={draft}
                   onChange={(e) => {
                     setDraft(e.target.value);
+                    lastActivityRef.current = Date.now();
                     if (transport === "websocket" && wsRef.current?.readyState === WebSocket.OPEN) {
                       if (typingDebounce.current) clearTimeout(typingDebounce.current);
                       typingDebounce.current = setTimeout(() => {
@@ -383,6 +577,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                       }, 300);
                     }
                   }}
+                  onFocus={() => resumePollRef.current?.()}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
