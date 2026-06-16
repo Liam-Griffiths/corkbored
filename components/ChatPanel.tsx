@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import Image from "next/image";
 
 interface ChatUser {
@@ -36,8 +36,14 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [visible, setVisible] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const sinceRef = useRef<string | null>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const autoScrollRef = useRef(true);
+  const prevScrollHeightRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const typingTimeouts = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -58,16 +64,22 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
     }, 3000));
   }, [currentUserId]);
 
-  const applyPayload = useCallback((data: { messages: ChatMessage[]; members: Member[] }, initial = false) => {
+  const applyPayload = useCallback((data: { messages: ChatMessage[]; members: Member[]; hasMore?: boolean }, initial = false) => {
     if (initial) {
       setMessages(data.messages);
       setMembers(data.members);
+      setHasMore(data.hasMore ?? false);
+      autoScrollRef.current = true;
       if (data.messages.length > 0) {
         sinceRef.current = data.messages[data.messages.length - 1].createdAt;
       }
     } else {
       if (data.messages.length > 0) {
-        setMessages((prev) => [...prev, ...data.messages]);
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const fresh = data.messages.filter((m) => !seen.has(m.id));
+          return fresh.length > 0 ? [...prev, ...fresh] : prev;
+        });
         sinceRef.current = data.messages[data.messages.length - 1].createdAt;
       }
       setMembers(data.members);
@@ -86,6 +98,42 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
       // network error — retry on next tick
     }
   }, [slug, applyPayload]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || !hasMore) return;
+    const oldest = messagesRef.current[0]?.createdAt;
+    if (!oldest) return;
+    setLoadingOlder(true);
+    // Preserve scroll position: remember height so we can restore the offset
+    // after older messages are prepended (see the layout effect below).
+    prevScrollHeightRef.current = scrollRef.current?.scrollHeight ?? null;
+    try {
+      const res = await fetch(`/api/projects/${slug}/chat?before=${encodeURIComponent(oldest)}`);
+      if (!res.ok) return;
+      const data: { messages: ChatMessage[]; hasMore?: boolean } = await res.json();
+      if (data.messages.length > 0) {
+        setMessages((prev) => {
+          const seen = new Set(prev.map((m) => m.id));
+          const older = data.messages.filter((m) => !seen.has(m.id));
+          return older.length > 0 ? [...older, ...prev] : prev;
+        });
+      }
+      setHasMore(data.hasMore ?? false);
+    } catch {
+      // network error — leave hasMore so the user can retry by scrolling
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [slug, hasMore, loadingOlder]);
+
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Track whether the user is pinned to the bottom so new messages only
+    // auto-scroll when they're already there.
+    autoScrollRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (el.scrollTop < 60) loadOlder();
+  }, [loadOlder]);
 
   const pingPresence = useCallback(async () => {
     await fetch(`/api/projects/${slug}/presence`, { method: "POST" }).catch(() => {});
@@ -127,7 +175,9 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
             if (frame.type === "init") {
               applyPayload({ messages: frame.messages ?? [], members: frame.members ?? [] }, true);
             } else if (frame.type === "message" && frame.message) {
-              setMessages((prev) => [...prev, frame.message]);
+              setMessages((prev) =>
+                prev.some((m) => m.id === frame.message.id) ? prev : [...prev, frame.message],
+              );
               // Clear typing indicator for the sender when their message arrives
               setTypingUsers((prev) => prev.filter((u) => u.userId !== frame.message.user.id));
             } else if (frame.type === "typing") {
@@ -152,15 +202,29 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
     };
   }, [transport, wsUrl, slug, applyPayload, handleTyping]);
 
-  // Scroll to bottom on new messages
+  // Keep a ref of the latest messages for stale-closure-free reads (loadOlder).
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]);
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // After messages change, either restore the scroll offset (when older
+  // messages were prepended) or stick to the bottom (when at the bottom and a
+  // new message arrived). Runs before paint to avoid a visible jump.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (prevScrollHeightRef.current != null) {
+      if (el) el.scrollTop = el.scrollHeight - prevScrollHeightRef.current;
+      prevScrollHeightRef.current = null;
+    } else if (autoScrollRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   async function send() {
     const body = draft.trim();
     if (!body || sending) return;
     setSending(true);
+    autoScrollRef.current = true;
     try {
       if (transport === "websocket" && wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "message", body }));
@@ -243,7 +307,12 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
         {visible && (
           <>
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+            <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {hasMore && (
+                <p className="py-2 text-center font-mono text-[0.65rem] text-ink-soft">
+                  {loadingOlder ? "Loading earlier messages…" : "Scroll up for earlier messages"}
+                </p>
+              )}
               {messages.length === 0 && (
                 <p className="py-8 text-center font-mono text-xs text-ink-soft">
                   No messages yet. Say hello 👋

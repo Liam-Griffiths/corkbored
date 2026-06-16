@@ -32,30 +32,50 @@ export async function GET(
   if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const since = req.nextUrl.searchParams.get("since");
+  const before = req.nextUrl.searchParams.get("before");
+  const PAGE_SIZE = 50;
+  const userSelect = { id: true, githubLogin: true, displayName: true, avatarUrl: true };
 
-  const messages = await prisma.chatMessage.findMany({
-    where: {
-      projectId: project.id,
-      ...(since ? { createdAt: { gt: new Date(since) } } : {}),
-    },
-    orderBy: { createdAt: "asc" },
-    take: since ? 100 : 60,
-    include: {
-      user: { select: { id: true, githubLogin: true, displayName: true, avatarUrl: true } },
-    },
-  });
+  let messages;
+  let hasMore = false;
+
+  if (since) {
+    // Incremental poll: new messages after the cursor, oldest-first.
+    messages = await prisma.chatMessage.findMany({
+      where: { projectId: project.id, createdAt: { gt: new Date(since) } },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+      include: { user: { select: userSelect } },
+    });
+  } else {
+    // Initial load or scroll-back: most recent page (optionally before a cursor).
+    // Fetch newest-first, take one extra to detect whether older messages exist,
+    // then reverse into oldest-first display order.
+    const rows = await prisma.chatMessage.findMany({
+      where: {
+        projectId: project.id,
+        ...(before ? { createdAt: { lt: new Date(before) } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE + 1,
+      include: { user: { select: userSelect } },
+    });
+    hasMore = rows.length > PAGE_SIZE;
+    messages = rows.slice(0, PAGE_SIZE).reverse();
+  }
 
   const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000);
   const members = await prisma.membership.findMany({
     where: { projectId: project.id, leftAt: null },
     select: {
       presenceAt: true,
-      user: { select: { id: true, githubLogin: true, displayName: true, avatarUrl: true } },
+      user: { select: userSelect },
     },
   });
 
   return NextResponse.json({
     messages,
+    hasMore,
     members: members.map((m) => ({
       ...m.user,
       online: m.presenceAt != null && m.presenceAt > onlineThreshold,
