@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 export function NewThreadForm({ slug }: { slug: string }) {
   const router = useRouter();
@@ -54,14 +55,13 @@ export function NewThreadForm({ slug }: { slug: string }) {
         maxLength={200}
         className="mb-2 w-full rounded-md border border-paper-edge bg-paper px-3 py-2 font-display text-sm font-semibold text-ink placeholder:font-sans placeholder:font-normal placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
       />
-      <textarea
+      <MarkdownEditor
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={setBody}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submit(); }}
-        placeholder="Write the first post… (markdown supported)"
+        placeholder="Write the first post…"
         rows={4}
         maxLength={5000}
-        className="w-full resize-y rounded-md border border-paper-edge bg-paper px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
       />
       {error && <p className="mt-1 font-mono text-xs text-pin-red">{error}</p>}
       <div className="mt-2 flex items-center justify-between">

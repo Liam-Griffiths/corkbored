@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Markdown } from "./Markdown";
+import { MarkdownEditor } from "./MarkdownEditor";
 
 interface Author {
   id: string;
@@ -197,12 +198,11 @@ export function ThreadView({
                   className="w-full rounded-md border border-paper-edge bg-paper-bright px-3 py-1.5 font-display text-sm font-semibold text-ink focus:outline-2 focus:outline-pin-gold"
                 />
               )}
-              <textarea
+              <MarkdownEditor
                 value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
+                onChange={setEditBody}
                 rows={4}
                 maxLength={5000}
-                className="w-full resize-y rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink focus:outline-2 focus:outline-pin-gold"
               />
               <div className="flex gap-2 font-mono text-xs">
                 <button onClick={() => void saveEdit(post)} className="text-pin-teal hover:underline">save</button>
@@ -251,15 +251,14 @@ export function ThreadView({
 
         {/* Reply composer */}
         <div className="border-t border-paper-edge pt-4">
-          <textarea
-            ref={replyRef}
+          <MarkdownEditor
+            textareaRef={replyRef}
             value={reply}
-            onChange={(e) => setReply(e.target.value)}
+            onChange={setReply}
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void submitReply(); }}
-            placeholder="Write a reply… (markdown supported)"
+            placeholder="Write a reply…"
             rows={3}
             maxLength={5000}
-            className="w-full resize-y rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
           />
           <div className="mt-2 flex items-center justify-between">
             <span className="font-mono text-xs text-ink-soft">⌘↵ to reply · markdown</span>

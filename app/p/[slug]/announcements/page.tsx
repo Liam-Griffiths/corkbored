@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { summaryOf } from "@/lib/text";
+import { MarkdownEditor } from "@/components/MarkdownEditor";
 
 const KIND_LABELS: Record<string, string> = {
   update: "Update", release: "Release", roles_open: "Roles open", milestone: "Milestone",
@@ -184,11 +185,14 @@ export default async function AnnouncementsPage({
               <option value="milestone">Milestone</option>
             </select>
           </div>
-          <textarea
-            name="body" required rows={editingDraft ? 6 : 4} maxLength={5000}
+          <MarkdownEditor
+            key={editingDraft?.id ?? "new"}
+            name="body"
+            required
+            rows={editingDraft ? 6 : 4}
+            maxLength={5000}
             defaultValue={editingDraft?.body ?? ""}
-            placeholder="What's new? (markdown supported)"
-            className="w-full resize-y rounded-md border border-paper-edge bg-paper-bright px-3 py-2 font-sans text-sm text-ink placeholder:text-ink-soft focus:outline-2 focus:outline-pin-gold"
+            placeholder="What's new?"
           />
           <p className="font-mono text-[0.65rem] text-ink-soft">Markdown supported · the full post gets its own shareable page</p>
           <div className="flex items-center gap-2">
