@@ -17,6 +17,7 @@ interface CalEvent {
   startAt: string;
   endAt: string | null;
   allDay: boolean;
+  isPublic: boolean;
   createdBy: EventUser;
 }
 
@@ -72,6 +73,7 @@ interface FormState {
   startTime: string;
   endTime: string;
   allDay: boolean;
+  isPublic: boolean;
   location: string;
   description: string;
 }
@@ -123,6 +125,7 @@ export function CalendarBoard({ slug }: { slug: string }) {
       startTime: "10:00",
       endTime: "",
       allDay: false,
+      isPublic: false,
       location: "",
       description: "",
     });
@@ -137,6 +140,7 @@ export function CalendarBoard({ slug }: { slug: string }) {
       startTime: ev.allDay ? "10:00" : toTimeInput(ev.startAt),
       endTime: ev.endAt ? toTimeInput(ev.endAt) : "",
       allDay: ev.allDay,
+      isPublic: ev.isPublic,
       location: ev.location ?? "",
       description: ev.description ?? "",
     });
@@ -160,6 +164,7 @@ export function CalendarBoard({ slug }: { slug: string }) {
       startAt,
       endAt,
       allDay: form.allDay,
+      isPublic: form.isPublic,
     };
 
     try {
@@ -274,8 +279,9 @@ export function CalendarBoard({ slug }: { slug: string }) {
                     key={ev.id}
                     onClick={(e) => { e.stopPropagation(); openEdit(ev); }}
                     className="block w-full truncate rounded-sm bg-pin-teal/15 px-1 py-0.5 text-left font-mono text-[0.62rem] text-ink hover:bg-pin-teal/25"
-                    title={ev.title}
+                    title={ev.isPublic ? `${ev.title} (public)` : ev.title}
                   >
+                    {ev.isPublic && <span className="text-pin-gold" title="Public">◆ </span>}
                     <span className="text-ink-soft">{ev.allDay ? "•" : timeLabel(ev.startAt)}</span> {ev.title}
                   </button>
                 ))}
@@ -342,6 +348,14 @@ export function CalendarBoard({ slug }: { slug: string }) {
                     onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
                   />
                   all day
+                </label>
+                <label className="flex items-center gap-1.5 font-mono text-xs text-ink-soft" title="Show this event on the project's public page">
+                  <input
+                    type="checkbox"
+                    checked={form.isPublic}
+                    onChange={(e) => setForm({ ...form, isPublic: e.target.checked })}
+                  />
+                  public
                 </label>
               </div>
 

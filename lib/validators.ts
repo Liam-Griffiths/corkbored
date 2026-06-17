@@ -68,6 +68,7 @@ export const CreateEventSchema = z.object({
   startAt: z.string().datetime({ offset: true }),
   endAt: z.string().datetime({ offset: true }).optional().nullable(),
   allDay: z.boolean().optional(),
+  isPublic: z.boolean().optional(),
 });
 
 export const PatchEventSchema = CreateEventSchema.partial();

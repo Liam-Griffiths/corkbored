@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { NotificationBell } from "./NotificationBell";
 
 const LIVE_NOTIFICATIONS_ENABLED = process.env.LIVE_NOTIFICATIONS_ENABLED === "true";
+const ACTIVITY_FEED_ENABLED = process.env.ACTIVITY_FEED_ENABLED === "true";
 
 export async function Header() {
   const session = await auth();
@@ -50,6 +51,14 @@ export async function Header() {
           </Link>
           {user && (
             <>
+              {ACTIVITY_FEED_ENABLED && (
+                <Link
+                  href="/activity"
+                  className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"
+                >
+                  your board
+                </Link>
+              )}
               <Link
                 href="/me"
                 className="rounded-md px-3 py-1.5 font-mono text-sm text-ink/70 hover:bg-ink/8 hover:text-ink"

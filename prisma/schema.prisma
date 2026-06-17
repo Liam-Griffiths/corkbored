@@ -245,6 +245,7 @@ model Event {
   startAt     DateTime
   endAt       DateTime?
   allDay      Boolean   @default(false)
+  isPublic    Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -252,6 +253,7 @@ model Event {
   createdBy User    @relation("EventCreator", fields: [createdById], references: [id])
 
   @@index([projectId, startAt])
+  @@index([projectId, isPublic, startAt])
 }
 
 model Tag {

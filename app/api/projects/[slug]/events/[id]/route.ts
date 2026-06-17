@@ -44,6 +44,7 @@ export async function PATCH(
         ...(body.startAt !== undefined ? { startAt: new Date(body.startAt) } : {}),
         ...(body.endAt !== undefined ? { endAt: body.endAt ? new Date(body.endAt) : null } : {}),
         ...(body.allDay !== undefined ? { allDay: body.allDay } : {}),
+        ...(body.isPublic !== undefined ? { isPublic: body.isPublic } : {}),
       },
       include: { createdBy: { select: creatorSelect } },
     });

@@ -61,6 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ slu
         startAt: new Date(body.startAt),
         endAt: body.endAt ? new Date(body.endAt) : null,
         allDay: body.allDay ?? false,
+        isPublic: body.isPublic ?? false,
       },
       include: { createdBy: { select: creatorSelect } },
     });

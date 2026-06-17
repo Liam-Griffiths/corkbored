@@ -27,3 +27,12 @@ body {
   font-family: var(--font-sans);
   line-height: 1.6;
 }
+
+/* A 3D push-pin head — glossy bead with a highlight. Sits atop pinned cards. */
+.pushpin {
+  background-image:
+    radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.8) 0 12%, transparent 45%);
+  box-shadow:
+    inset -2px -2px 3px rgba(0, 0, 0, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}

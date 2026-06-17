@@ -38,6 +38,14 @@ function sameDay(a: string, b: string): boolean {
   return startOfDay(a) === startOfDay(b);
 }
 
+// Messages from the same author within this window are visually grouped
+// (single avatar/name header). A longer gap starts a fresh block.
+const GROUP_GAP_MS = 10 * 60_000;
+
+function timeLabel(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 // Adaptive poll cadence: fast during active conversation, backing off as the
 // chat goes quiet, then stopping entirely (manual refresh) once it's idle for
 // an hour — so a forgotten open tab doesn't poll forever.
@@ -75,6 +83,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [pollPaused, setPollPaused] = useState(false);
+  const [offline, setOffline] = useState(false);
   const lastActivityRef = useRef<number>(0);
   const lastPresenceRef = useRef<number>(0);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,10 +145,15 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
         ? `/api/projects/${slug}/chat`
         : `/api/projects/${slug}/chat?since=${encodeURIComponent(sinceRef.current)}`;
       const res = await fetch(url);
+      // 5xx (e.g. DB cold-start / suspended) is a transient backend outage —
+      // surface the reconnect toast. Auth/client errors aren't "network issues".
+      if (res.status >= 500) { setOffline(true); return; }
       if (!res.ok) return;
       applyPayload(await res.json(), initial);
+      setOffline(false);
     } catch {
-      // network error — retry on next tick
+      // fetch threw — offline or backend unreachable; retry on next tick
+      setOffline(true);
     }
   }, [slug, applyPayload]);
 
@@ -275,6 +289,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
             const frame = JSON.parse(e.data);
             if (frame.type === "init") {
               applyPayload({ messages: frame.messages ?? [], members: frame.members ?? [] }, true);
+              setOffline(false);
             } else if (frame.type === "message" && frame.message) {
               setMessages((prev) =>
                 prev.some((m) => m.id === frame.message.id) ? prev : [...prev, frame.message],
@@ -291,6 +306,7 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
 
         ws.onclose = () => {
           // Reconnect after 3s on unexpected close
+          setOffline(true);
           reconnectTimeout = setTimeout(connect, 3000);
         };
       } catch { /* fetch error — retry */ }
@@ -389,7 +405,17 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
   const onlineCount = members.filter((m) => m.online).length;
 
   return (
-    <div className={`flex ${fullHeight ? "h-full" : "h-[600px]"} rounded-sm border border-paper-edge bg-paper shadow-[0_8px_18px_rgba(0,0,0,.18)] overflow-hidden`}>
+    <div className={`relative flex ${fullHeight ? "h-full" : "h-[600px]"} rounded-sm border border-paper-edge bg-paper shadow-[0_8px_18px_rgba(0,0,0,.18)] overflow-hidden`}>
+      {/* Reconnect toast — shown while the backend is unreachable */}
+      {offline && (
+        <div
+          role="status"
+          className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-pin-gold/40 bg-ink px-3.5 py-1.5 font-mono text-[0.7rem] text-paper shadow-[0_4px_12px_rgba(0,0,0,.3)]"
+        >
+          <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-pin-gold" />
+          Network issues, reconnecting…
+        </div>
+      )}
       {/* Sidebar: members */}
       <aside className="w-48 flex-shrink-0 border-r border-paper-edge bg-board flex flex-col">
         <div className="px-3 py-3 border-b border-paper-edge">
@@ -459,7 +485,10 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
               {messages.map((msg, i) => {
                 const prev = messages[i - 1];
                 const newDay = !prev || !sameDay(prev.createdAt, msg.createdAt);
-                const grouped = !newDay && prev?.user.id === msg.user.id;
+                const grouped =
+                  !newDay &&
+                  prev?.user.id === msg.user.id &&
+                  new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() < GROUP_GAP_MS;
                 const isOwn = msg.user.id === currentUserId;
                 return (
                   <div key={msg.id}>
@@ -496,8 +525,11 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                           <span className={`font-mono text-xs font-semibold ${isOwn ? "text-pin-teal" : "text-ink"}`}>
                             {msg.user.displayName ?? msg.user.githubLogin}
                           </span>
-                          <span className="font-mono text-[0.65rem] text-ink-soft">
-                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                          <span
+                            className="font-mono text-[0.65rem] text-ink-soft"
+                            title={new Date(msg.createdAt).toLocaleString()}
+                          >
+                            {timeLabel(msg.createdAt)}
                           </span>
                         </div>
                       )}
@@ -523,6 +555,14 @@ export function ChatPanel({ slug, currentUserId, transport, wsUrl, fullHeight }:
                         </div>
                       ) : (
                         <div className="group/msg relative">
+                          {grouped && (
+                            <span
+                              className="absolute -left-[38px] top-1 hidden w-[34px] select-none text-right font-mono text-[0.55rem] leading-relaxed tabular-nums text-ink-soft group-hover/msg:inline-block"
+                              title={new Date(msg.createdAt).toLocaleString()}
+                            >
+                              {timeLabel(msg.createdAt)}
+                            </span>
+                          )}
                           <p className="text-sm text-ink leading-relaxed break-words">{msg.body}</p>
                           {isOwn && (
                             <div className="absolute -top-1 right-0 hidden gap-1.5 rounded-sm border border-paper-edge bg-paper px-1.5 py-0.5 font-mono text-[0.6rem] text-ink-soft shadow-sm group-hover/msg:flex">

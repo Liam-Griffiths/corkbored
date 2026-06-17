@@ -125,6 +125,14 @@ export default async function ProjectLayout({
             </div>
 
             <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+              {memberRole && (
+                <Link
+                  href={`/p/${slug}?view=public`}
+                  className="rounded-md border border-paper-edge px-3 py-1.5 font-mono text-xs text-ink-soft hover:border-ink-soft hover:text-ink"
+                >
+                  view public page →
+                </Link>
+              )}
               <ShareButtons shortUrl={`${appUrl}/${shortCode}`} title={project.title} />
               {userId && !isOwner && (
                 <FollowButton

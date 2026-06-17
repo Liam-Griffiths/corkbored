@@ -22,8 +22,15 @@ const EVENT_LABELS: Record<string, string> = {
   manual: "completed a task",
 };
 
-export default async function ProjectOverviewPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function ProjectOverviewPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ view?: string }>;
+}) {
   const { slug } = await params;
+  const { view } = await searchParams;
   const [project, session] = await Promise.all([
     prisma.project.findUnique({
       where: { slug },
@@ -51,9 +58,11 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const membership = userId ? project.memberships.find((m) => m.userId === userId) : null;
   const isMember = !!membership;
   const isOwner = membership?.role === "owner";
+  // Members can preview their project's public profile via ?view=public.
+  const previewingPublic = isMember && view === "public";
 
   // ── Member mission control: chat + who's online + activity ──────────────────
-  if (isMember && userId) {
+  if (isMember && userId && !previewingPublic) {
     const activity = await prisma.contributionEvent.findMany({
       where: { projectId: project.id },
       orderBy: { occurredAt: "desc" },
@@ -167,9 +176,25 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     );
   }
 
+  // Upcoming public events for the public profile.
+  const upcomingEvents = await prisma.event.findMany({
+    where: { projectId: project.id, isPublic: true, startAt: { gte: new Date() } },
+    orderBy: { startAt: "asc" },
+    take: 5,
+  });
+
   // ── Public face: roles + team + announcements ───────────────────────────────
   return (
     <div className="space-y-8">
+      {previewingPublic && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-pin-gold/40 bg-pin-gold/10 px-4 py-2">
+          <span className="font-mono text-xs text-ink">You&rsquo;re previewing your public project page.</span>
+          <Link href={`/p/${slug}`} className="font-mono text-xs text-pin-teal hover:underline">
+            ← back to workspace
+          </Link>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="flex flex-wrap gap-8 border-b border-paper-edge pb-6">
         <div>
@@ -290,6 +315,37 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
           </div>
         </section>
       </div>
+
+      {/* Upcoming public events */}
+      {upcomingEvents.length > 0 && (
+        <section className="border-t border-paper-edge pt-8">
+          <h2 className="mb-3 font-mono text-xs uppercase tracking-widest text-ink-soft">Upcoming</h2>
+          <ul className="space-y-2">
+            {upcomingEvents.map((ev) => {
+              const start = new Date(ev.startAt);
+              return (
+                <li key={ev.id} className="flex items-center gap-3.5 rounded-lg border border-paper-edge bg-paper p-3.5">
+                  <div className="w-11 flex-shrink-0 text-center">
+                    <p className="font-mono text-[0.6rem] uppercase tracking-wide text-ink-soft">
+                      {start.toLocaleDateString([], { month: "short" })}
+                    </p>
+                    <p className="font-display text-xl font-bold leading-none text-ink">{start.getDate()}</p>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">{ev.title}</p>
+                    <p className="font-mono text-xs text-ink-soft">
+                      {ev.allDay
+                        ? "All day"
+                        : start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {ev.location ? ` · ${ev.location}` : ""}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* Recent announcements */}
       {project.announcements.length > 0 && (
