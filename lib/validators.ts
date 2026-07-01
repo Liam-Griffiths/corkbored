@@ -25,6 +25,11 @@ export const CreateApplicationSchema = z.object({
   pitch: z.string().min(20).max(500),
 });
 
+export const CreateInviteSchema = z.object({
+  email: z.string().email().max(200),
+  role: z.enum(["member", "maintainer"]).optional(),
+});
+
 export const PatchApplicationSchema = z.object({
   status: z.enum(["accepted", "declined"]),
 });

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { verifyRepoForUser } from "@/lib/github";
 import { upsertTagsByLabel, getPopularTags } from "@/lib/tags";
+import { limitsFor, tierForUser } from "@/lib/limits";
 import { Header } from "@/components/Header";
 
 interface Props {
@@ -23,6 +24,15 @@ export default async function NewProjectPage({ searchParams }: Props) {
 
     const s = await auth();
     if (!s?.user?.id || !s.user.githubLogin) return;
+
+    // Cap how many projects a user can own, based on their tier.
+    const maxProjects = limitsFor(await tierForUser(s.user.id)).projects;
+    const ownedCount = await prisma.project.count({
+      where: { ownerId: s.user.id, moderationStatus: { not: "removed" } },
+    });
+    if (ownedCount >= maxProjects) {
+      redirect("/projects/new?error=project_limit");
+    }
 
     const repoRaw = (formData.get("repoFullName") as string).trim().replace(/^https?:\/\/github\.com\//, "");
     const title = (formData.get("title") as string).trim();
@@ -106,6 +116,7 @@ export default async function NewProjectPage({ searchParams }: Props) {
 
   const errorMessages: Record<string, string> = {
     missing_fields: "Please fill in all required fields and add at least one role.",
+    project_limit: "You've reached the project limit for your plan. Upgrade to pin more.",
     not_found: "Repo not found on GitHub. Check the name and make sure it's public.",
     no_permission: "That repo doesn't belong to your GitHub account.",
     not_enough_commits: "The repo needs at least one commit before you can pin it.",

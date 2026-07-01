@@ -4,6 +4,9 @@ import { requireUser, AuthError } from "@/lib/authz";
 import { CreateAnnouncementSchema } from "@/lib/validators";
 import { apiError } from "@/lib/api";
 import { triage } from "@/lib/moderation";
+import { limitsFor } from "@/lib/limits";
+import { sendNewAnnouncement, notificationEmailsEnabled } from "@/lib/email";
+import { appUrl } from "@/lib/invite";
 
 export async function POST(
   req: NextRequest,
@@ -17,6 +20,7 @@ export async function POST(
       where: { slug },
       include: {
         memberships: { where: { userId: user.id, leftAt: null } },
+        owner: { select: { tier: true } },
       },
     });
     if (!project) return Response.json({ error: "Not found" }, { status: 404 });
@@ -26,15 +30,16 @@ export async function POST(
       throw new AuthError(403, "Only owner or maintainer can post announcements");
     }
 
-    // Rate limit: 3 announcements per project per day
+    // Rate limit announcements per project per day — keyed off the owner's tier.
+    const maxPerDay = limitsFor(project.owner.tier).announcementsPerDay;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayCount = await prisma.announcement.count({
       where: { projectId: project.id, createdAt: { gte: today } },
     });
-    if (todayCount >= 3) {
+    if (todayCount >= maxPerDay) {
       return Response.json(
-        { error: "Announcement limit reached for today (3/day per project)" },
+        { error: `Announcement limit reached for today (${maxPerDay}/day per project)` },
         { status: 429 },
       );
     }
@@ -104,6 +109,30 @@ export async function POST(
           announcementId: announcement.id,
         })),
       });
+
+      // Fan out emails to recipients (non-fatal). Only do the email lookup when
+      // notification emails are on — this can be a large recipient set.
+      if (notificationEmailsEnabled()) {
+        try {
+          const recipients = await prisma.user.findMany({
+            where: { id: { in: recipientIds }, email: { not: null } },
+            select: { email: true },
+          });
+          const announcementUrl = `${appUrl()}/p/${project.slug}/announcements/${announcement.id}`;
+          await Promise.allSettled(
+            recipients.map((r) =>
+              sendNewAnnouncement({
+                memberEmail: r.email!,
+                projectTitle: project.title,
+                announcementTitle: announcement.title,
+                projectUrl: announcementUrl,
+              }),
+            ),
+          );
+        } catch (err) {
+          console.error("[email] announcement fan-out failed", err);
+        }
+      }
     }
 
     return Response.json(announcement, { status: 201 });

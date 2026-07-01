@@ -1,0 +1,6 @@
+- security audit, injection, cross site scripting etc.
+- bot mitigation
+- the builders contract
+- more any project language
+- onboarding flow
+- sitemap etc

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
@@ -5,6 +6,54 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { Markdown } from "@/components/Markdown";
 import { ShareButtons } from "@/components/ShareButtons";
+import { summaryOf } from "@/lib/text";
+import { absoluteUrl } from "@/lib/site";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; id: string }>;
+}): Promise<Metadata> {
+  const { slug, id } = await params;
+  const announcement = await prisma.announcement.findUnique({
+    where: { id },
+    select: {
+      title: true,
+      summary: true,
+      body: true,
+      moderationStatus: true,
+      publishedAt: true,
+      project: { select: { slug: true, title: true, moderationStatus: true } },
+    },
+  });
+
+  const isPublic =
+    announcement &&
+    announcement.project.slug === slug &&
+    announcement.moderationStatus === "published" &&
+    announcement.publishedAt != null &&
+    announcement.project.moderationStatus === "published";
+
+  if (!isPublic) {
+    return { title: "Announcement", robots: { index: false } };
+  }
+
+  const description = summaryOf(announcement);
+  const canonical = absoluteUrl(`/p/${slug}/announcements/${id}`);
+
+  return {
+    title: `${announcement.title} · ${announcement.project.title}`,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: announcement.title,
+      description,
+      url: canonical,
+      type: "article",
+      publishedTime: announcement.publishedAt?.toISOString(),
+    },
+  };
+}
 
 // Per-kind theming — a coloured chip + matching push-pin, so each kind of
 // announcement reads at a glance and ties into the corkboard look.

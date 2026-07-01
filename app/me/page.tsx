@@ -3,7 +3,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { limitsFor, tierForUser } from "@/lib/limits";
 import { Header } from "@/components/Header";
+import { DeleteAccountButton } from "@/components/DeleteAccountButton";
+import { DataExportPanel } from "@/components/DataExportPanel";
 
 export default async function MePage() {
   const session = await auth();
@@ -11,7 +14,7 @@ export default async function MePage() {
 
   const userId = session.user.id;
 
-  const [user, applications, memberships, links] = await Promise.all([
+  const [user, applications, memberships, links, latestExport] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       include: { skills: true },
@@ -35,9 +38,16 @@ export default async function MePage() {
       where: { userId },
       orderBy: { position: "asc" },
     }),
+    prisma.dataExport.findFirst({
+      where: { userId },
+      orderBy: { requestedAt: "desc" },
+      select: { id: true, status: true, requestedAt: true, completedAt: true, expiresAt: true },
+    }),
   ]);
 
   if (!user) redirect("/");
+
+  const maxLinks = limitsFor(user.tier).profileLinks;
 
   async function saveProfile(formData: FormData) {
     "use server";
@@ -83,8 +93,9 @@ export default async function MePage() {
     let parsedUrl = url;
     if (!/^https?:\/\//i.test(url)) parsedUrl = `https://${url}`;
 
+    const limit = limitsFor(await tierForUser(s.user.id)).profileLinks;
     const count = await prisma.userLink.count({ where: { userId: s.user.id } });
-    if (count >= 10) return;
+    if (count >= limit) return;
 
     await prisma.userLink.create({
       data: { userId: s.user.id, label, url: parsedUrl, position: count },
@@ -224,7 +235,9 @@ export default async function MePage() {
         {/* My links */}
         <section className="mb-8 rounded-sm bg-paper p-6 shadow-[0_14px_30px_rgba(0,0,0,.18)]">
           <h2 className="font-display font-semibold text-lg text-ink mb-1">My links</h2>
-          <p className="font-mono text-xs text-ink-soft mb-4">Show on your public profile. Up to 10 links.</p>
+          <p className="font-mono text-xs text-ink-soft mb-4">
+            Show on your public profile. {links.length} / {maxLinks} used.
+          </p>
 
           {links.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -250,7 +263,7 @@ export default async function MePage() {
             </div>
           )}
 
-          {links.length < 10 && (
+          {links.length < maxLinks && (
             <form action={addLink} className="flex flex-wrap gap-2">
               <input
                 name="label"
@@ -327,6 +340,37 @@ export default async function MePage() {
               ))}
             </div>
           )}
+        </section>
+
+        {/* Privacy & account */}
+        <section>
+          <h2 className="font-display font-semibold text-lg text-ink mb-1">Privacy &amp; data</h2>
+          <p className="font-mono text-xs text-ink-soft mb-4">
+            Export your data or permanently delete your account.{" "}
+            <Link href="/privacy" className="text-pin-teal underline underline-offset-2">Privacy policy</Link>
+          </p>
+
+          <DataExportPanel
+            initialExport={
+              latestExport
+                ? {
+                    id: latestExport.id,
+                    status: latestExport.status as "pending" | "ready" | "failed",
+                    requestedAt: latestExport.requestedAt.toISOString(),
+                    completedAt: latestExport.completedAt?.toISOString() ?? null,
+                    expiresAt: latestExport.expiresAt?.toISOString() ?? null,
+                  }
+                : null
+            }
+          />
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-pin-red/30 bg-paper p-4">
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-xs text-ink">Delete account</p>
+              <p className="font-mono text-[0.65rem] text-ink-soft">Permanently erase your account and data. This can&apos;t be undone.</p>
+            </div>
+            <DeleteAccountButton />
+          </div>
         </section>
       </main>
     </>

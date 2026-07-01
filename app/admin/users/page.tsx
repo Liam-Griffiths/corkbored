@@ -28,6 +28,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
       displayName: true,
       email: true,
       isAdmin: true,
+      tier: true,
       createdAt: true,
       _count: { select: { memberships: true, applications: true, ownedProjects: true } },
     },
@@ -45,6 +46,20 @@ export default async function AdminUsersPage({ searchParams }: Props) {
     if (userId === s.user.id) return; // can't change own role
 
     await prisma.user.update({ where: { id: userId }, data: { isAdmin: makeAdmin } });
+    redirect(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  }
+
+  async function setTier(formData: FormData) {
+    "use server";
+    const s = await auth();
+    if (!s?.user?.id) return;
+    const adminUser = await prisma.user.findUnique({ where: { id: s.user.id } });
+    if (!adminUser?.isAdmin) return;
+
+    const userId = formData.get("userId") as string;
+    const tier = formData.get("tier") === "supporter" ? "supporter" : "free";
+
+    await prisma.user.update({ where: { id: userId }, data: { tier } });
     redirect(`/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   }
 
@@ -81,6 +96,9 @@ export default async function AdminUsersPage({ searchParams }: Props) {
                 {u.isAdmin && (
                   <span className="rounded-sm bg-ink px-1.5 py-0.5 font-mono text-[0.6rem] uppercase text-paper">admin</span>
                 )}
+                {u.tier === "supporter" && (
+                  <span className="rounded-sm bg-pin-gold px-1.5 py-0.5 font-mono text-[0.6rem] uppercase text-ink">supporter</span>
+                )}
               </div>
               <p className="font-mono text-xs text-ink-soft">
                 @{u.githubLogin} · {u.email ?? "no email"} · joined {new Date(u.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
@@ -89,6 +107,16 @@ export default async function AdminUsersPage({ searchParams }: Props) {
                 {u._count.ownedProjects} owned · {u._count.memberships} memberships · {u._count.applications} applications
               </p>
             </div>
+            <form action={setTier} className="flex-shrink-0">
+              <input type="hidden" name="userId" value={u.id} />
+              <input type="hidden" name="tier" value={u.tier === "supporter" ? "free" : "supporter"} />
+              <button
+                type="submit"
+                className="rounded-md border border-paper-edge px-3 py-1 font-mono text-xs text-ink-soft transition-colors hover:border-ink-soft hover:text-ink"
+              >
+                {u.tier === "supporter" ? "Downgrade to free" : "Make supporter"}
+              </button>
+            </form>
             <form action={toggleAdmin} className="flex-shrink-0">
               <input type="hidden" name="userId" value={u.id} />
               <input type="hidden" name="makeAdmin" value={u.isAdmin ? "false" : "true"} />

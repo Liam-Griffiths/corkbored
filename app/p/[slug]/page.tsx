@@ -253,7 +253,7 @@ export default async function ProjectOverviewPage({
                     </Link>
                   ) : (
                     <Link
-                      href="/api/auth/signin"
+                      href="/signin"
                       className="flex-shrink-0 rounded-md border border-paper-edge px-3 py-1.5 font-mono text-xs text-ink-soft hover:border-ink/40"
                     >
                       Sign in

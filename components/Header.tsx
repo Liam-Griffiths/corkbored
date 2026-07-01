@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth, signIn, signOut } from "@/lib/auth";
+import { auth, signOut } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { NotificationBell } from "./NotificationBell";
 
@@ -106,19 +106,12 @@ export async function Header() {
               </form>
             </>
           ) : (
-            <form
-              action={async () => {
-                "use server";
-                await signIn("github");
-              }}
+            <Link
+              href="/signin"
+              className="rounded-md bg-pin-red px-4 py-2 font-mono text-sm font-medium text-white shadow-[0_2px_0_#7c2d14] hover:-translate-y-px active:translate-y-px"
             >
-              <button
-                type="submit"
-                className="rounded-md bg-pin-red px-4 py-2 font-mono text-sm font-medium text-white shadow-[0_2px_0_#7c2d14] hover:-translate-y-px active:translate-y-px"
-              >
-                sign in with GitHub
-              </button>
-            </form>
+              sign in with GitHub
+            </Link>
           )}
         </div>
       </div>

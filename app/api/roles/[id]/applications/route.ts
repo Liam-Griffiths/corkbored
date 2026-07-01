@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/authz";
 import { CreateApplicationSchema } from "@/lib/validators";
 import { apiError } from "@/lib/api";
 import { triage } from "@/lib/moderation";
+import { sendApplicationReceived, notificationEmailsEnabled } from "@/lib/email";
+import { appUrl } from "@/lib/invite";
 
 export async function POST(
   req: NextRequest,
@@ -96,6 +98,33 @@ export async function POST(
           applicationId: application.id,
         },
       });
+
+      // Email the owner (non-fatal; gated by the notification-email flag).
+      if (notificationEmailsEnabled()) {
+        try {
+          const [owner, applicant] = await Promise.all([
+            prisma.user.findUnique({
+              where: { id: ownerMembership.userId },
+              select: { email: true },
+            }),
+            prisma.user.findUnique({
+              where: { id: user.id },
+              select: { displayName: true, githubLogin: true },
+            }),
+          ]);
+          if (owner?.email) {
+            await sendApplicationReceived({
+              ownerEmail: owner.email,
+              applicantName: applicant?.displayName ?? applicant?.githubLogin ?? "Someone",
+              projectTitle: role.project.title,
+              roleName: role.title,
+              dashboardUrl: `${appUrl()}/p/${role.project.slug}/applications`,
+            });
+          }
+        } catch (err) {
+          console.error("[email] application received failed", err);
+        }
+      }
     }
 
     return Response.json(application, { status: 201 });

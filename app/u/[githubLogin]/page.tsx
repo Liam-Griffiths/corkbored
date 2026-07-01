@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -7,9 +8,46 @@ import { Header } from "@/components/Header";
 import { FollowButton } from "@/components/FollowButton";
 import { ShareButtons } from "@/components/ShareButtons";
 import { getOrCreateUserShortlink } from "@/lib/shortlink";
+import { absoluteUrl } from "@/lib/site";
 
 interface Props {
   params: Promise<{ githubLogin: string }>;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { githubLogin } = await params;
+  const user = await prisma.user.findUnique({
+    where: { githubLogin },
+    select: {
+      displayName: true,
+      githubLogin: true,
+      lookingFor: true,
+      skills: { select: { skill: true }, take: 6 },
+    },
+  });
+
+  if (!user) {
+    return { title: "Profile", robots: { index: false } };
+  }
+
+  const name = user.displayName?.trim() || user.githubLogin || "Member";
+  const skills = user.skills.map((s) => s.skill).join(", ");
+  const description =
+    user.lookingFor?.trim() ||
+    (skills ? `${name} — ${skills}.` : `${name} on corkbored.`);
+  const canonical = absoluteUrl(`/u/${githubLogin}`);
+
+  return {
+    title: name,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: name,
+      description,
+      url: canonical,
+      type: "profile",
+    },
+  };
 }
 
 async function getProfile(githubLogin: string) {

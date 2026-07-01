@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { limitsFor } from "@/lib/limits";
 
 type RoleStatus = "open" | "filled" | "closed";
 
@@ -18,9 +19,11 @@ export default async function RolesPage({
 
   const project = await prisma.project.findUnique({
     where: { slug },
-    select: { id: true, moderationStatus: true, ownerId: true },
+    select: { id: true, moderationStatus: true, ownerId: true, owner: { select: { tier: true } } },
   });
   if (!project || project.moderationStatus === "removed") notFound();
+
+  const maxOpenRoles = limitsFor(project.owner.tier).openRolesPerProject;
 
   const userId = session?.user?.id;
   const membership = userId
@@ -64,7 +67,7 @@ export default async function RolesPage({
     const detail = (formData.get("detail") as string)?.trim() || undefined;
     if (!title) return;
     const count = await prisma.role.count({ where: { projectId: project!.id, status: "open" } });
-    if (count >= 5) return;
+    if (count >= maxOpenRoles) return;
     await prisma.role.create({ data: { projectId: project!.id, title, detail } });
     redirect(`/p/${slug}/roles`);
   }
@@ -93,10 +96,10 @@ export default async function RolesPage({
     const status = (formData.get("status") as string) as RoleStatus;
     if (!title) return;
 
-    // Respect the 5 open-role cap when reopening a role.
+    // Respect the open-role cap when reopening a role.
     if (status === "open" && role.status !== "open") {
       const count = await prisma.role.count({ where: { projectId: project!.id, status: "open" } });
-      if (count >= 5) return;
+      if (count >= maxOpenRoles) return;
     }
 
     await prisma.role.update({ where: { id }, data: { title, detail, status } });
@@ -199,7 +202,7 @@ export default async function RolesPage({
         )}
       </div>
 
-      {isOwner && openRoles.length < 5 && (
+      {isOwner && openRoles.length < maxOpenRoles && (
         <form action={addRole} className="rounded-lg border border-paper-edge p-5 space-y-3">
           <p className="font-mono text-xs uppercase tracking-widest text-ink-soft">Add a role</p>
           <input name="title" required maxLength={80} placeholder="Role title"
@@ -213,8 +216,8 @@ export default async function RolesPage({
           </button>
         </form>
       )}
-      {isOwner && openRoles.length >= 5 && (
-        <p className="font-mono text-xs text-ink-soft">Maximum 5 open roles reached.</p>
+      {isOwner && openRoles.length >= maxOpenRoles && (
+        <p className="font-mono text-xs text-ink-soft">Maximum {maxOpenRoles} open roles reached.</p>
       )}
     </div>
   );

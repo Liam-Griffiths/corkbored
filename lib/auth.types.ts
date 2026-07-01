@@ -1,4 +1,5 @@
 import "next-auth";
+import type { UserTier } from "./generated/prisma/client";
 
 declare module "next-auth" {
   interface User {
@@ -7,6 +8,7 @@ declare module "next-auth" {
     displayName?: string;
     avatarUrl?: string;
     isAdmin?: boolean;
+    tier?: UserTier;
   }
   interface Session {
     user: {
@@ -16,6 +18,7 @@ declare module "next-auth" {
       image?: string | null;
       githubLogin?: string;
       isAdmin?: boolean;
+      tier?: UserTier;
     };
   }
 }

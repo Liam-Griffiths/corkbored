@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { absoluteUrl } from "@/lib/site";
 import { auth } from "@/lib/auth";
 import { Header } from "@/components/Header";
 import { ProjectTabs } from "@/components/ProjectTabs";
@@ -17,6 +19,37 @@ const STAGE_COLORS: Record<string, string> = {
   prototype: "bg-pin-gold text-ink",
   building: "bg-pin-teal text-white",
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const project = await prisma.project.findUnique({
+    where: { slug },
+    select: { title: true, pitch: true, moderationStatus: true },
+  });
+
+  if (!project || project.moderationStatus !== "published") {
+    return { title: "Project", robots: { index: false } };
+  }
+
+  const description = project.pitch?.trim() || `${project.title} on corkbored.`;
+  const canonical = absoluteUrl(`/p/${slug}`);
+
+  return {
+    title: project.title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: project.title,
+      description,
+      url: canonical,
+      type: "website",
+    },
+  };
+}
 
 export default async function ProjectLayout({
   children,

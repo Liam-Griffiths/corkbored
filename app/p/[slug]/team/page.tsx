@@ -3,6 +3,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
+import { InvitePanel } from "@/components/InvitePanel";
+import { inviteUrl } from "@/lib/invite";
 
 export default async function TeamPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -23,6 +25,31 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
 
   const myMembership = memberships.find((m) => m.userId === userId);
   const isOwner = myMembership?.role === "owner";
+  const isManager = isOwner || myMembership?.role === "maintainer";
+
+  const pendingInvites = isManager
+    ? (
+        await prisma.projectInvite.findMany({
+          where: { projectId: project.id, status: { in: ["pending", "sent"] } },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            email: true,
+            role: true,
+            token: true,
+            status: true,
+            expiresAt: true,
+          },
+        })
+      ).map((i) => ({
+        id: i.id,
+        email: i.email,
+        role: i.role as string,
+        status: i.status as string,
+        url: inviteUrl(i.token),
+        expiresAt: i.expiresAt.toISOString(),
+      }))
+    : [];
 
   async function removeMember(formData: FormData) {
     "use server";
@@ -100,6 +127,8 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
           );
         })}
       </div>
+
+      {isManager && <InvitePanel slug={slug} initialInvites={pendingInvites} />}
 
       <p className="mt-6 font-mono text-xs text-ink-soft">
         Every join and leave is timestamped — this record backs contribution attribution.

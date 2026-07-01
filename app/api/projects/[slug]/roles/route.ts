@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireProjectOwner } from "@/lib/authz";
 import { CreateRoleSchema } from "@/lib/validators";
 import { apiError } from "@/lib/api";
+import { limitsFor } from "@/lib/limits";
 
 export async function POST(
   req: NextRequest,
@@ -10,17 +11,21 @@ export async function POST(
 ) {
   try {
     const { slug } = await params;
-    const project = await prisma.project.findUnique({ where: { slug } });
+    const project = await prisma.project.findUnique({
+      where: { slug },
+      include: { owner: { select: { tier: true } } },
+    });
     if (!project) return Response.json({ error: "Not found" }, { status: 404 });
 
     await requireProjectOwner(project.id);
 
+    const maxOpenRoles = limitsFor(project.owner.tier).openRolesPerProject;
     const openCount = await prisma.role.count({
       where: { projectId: project.id, status: "open" },
     });
-    if (openCount >= 5) {
+    if (openCount >= maxOpenRoles) {
       return Response.json(
-        { error: "Maximum 5 open roles per project" },
+        { error: `Maximum ${maxOpenRoles} open roles per project` },
         { status: 422 },
       );
     }

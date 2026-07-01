@@ -145,6 +145,9 @@ const css = `
 
 footer.lp-footer{border-top:1px solid rgba(43,31,20,.12);padding:28px 0;font-family:var(--font-ibm-plex-mono),ui-monospace,monospace;font-size:.76rem;color:#7a6652;background:#f0e8d8}
 footer.lp-footer .wrap{max-width:1080px;margin:0 auto;padding:0 24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+footer.lp-footer .foot-links{display:flex;gap:18px}
+footer.lp-footer .foot-links a{color:#7a6652}
+footer.lp-footer .foot-links a:hover{color:#2b1f14}
 
 @media (min-width:881px) and (pointer:fine){.lp .drag-hint{display:block}}
 @media (max-width:880px){
@@ -355,7 +358,7 @@ export default function LandingPage() {
                 <div className="signup-card launch-card">
                   <h3>Start building with people who care</h3>
                   <p>Sign in with GitHub to pin a project or apply to collaborate.</p>
-                  <Link className="btn btn-primary" href="/api/auth/signin?callbackUrl=/board">
+                  <Link className="btn btn-primary" href="/signin?callbackUrl=/board">
                     Sign in with GitHub →
                   </Link>
                   <a className="sublink" href="/board">Browse the board first</a>
@@ -404,6 +407,12 @@ export default function LandingPage() {
         <footer className="lp-footer">
           <div className="wrap">
             <span>© 2026 corkbored.com</span>
+            <nav className="foot-links">
+              <Link href="/terms">Terms</Link>
+              <Link href="/privacy">Privacy</Link>
+              <Link href="/cookies">Cookies</Link>
+              <Link href="/dmca">DMCA</Link>
+            </nav>
             <span>built by a dev, for devs</span>
           </div>
         </footer>

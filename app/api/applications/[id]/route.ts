@@ -4,6 +4,8 @@ import { requireProjectOwner } from "@/lib/authz";
 import { PatchApplicationSchema } from "@/lib/validators";
 import { inviteCollaborator } from "@/lib/github";
 import { apiError } from "@/lib/api";
+import { sendApplicationDecided, notificationEmailsEnabled } from "@/lib/email";
+import { appUrl } from "@/lib/invite";
 
 export async function PATCH(
   req: NextRequest,
@@ -15,7 +17,7 @@ export async function PATCH(
       where: { id },
       include: {
         role: { include: { project: true } },
-        applicant: { select: { githubLogin: true } },
+        applicant: { select: { githubLogin: true, email: true } },
       },
     });
     if (!application) {
@@ -75,6 +77,21 @@ export async function PATCH(
           githubInviteStatus: invite.ok ? "sent" : "failed",
         },
       });
+    }
+
+    // Email the applicant of the decision (non-fatal; gated by the flag).
+    if (notificationEmailsEnabled() && application.applicant.email) {
+      try {
+        await sendApplicationDecided({
+          applicantEmail: application.applicant.email,
+          decision: status,
+          projectTitle: application.role.project.title,
+          roleName: application.role.title,
+          projectUrl: `${appUrl()}/p/${application.role.project.slug}`,
+        });
+      } catch (err) {
+        console.error("[email] application decided failed", err);
+      }
     }
 
     return Response.json(updated);

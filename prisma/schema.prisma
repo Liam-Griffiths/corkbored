@@ -39,6 +39,7 @@ enum InviteStatus {
   sent
   accepted
   failed
+  revoked
 }
 
 enum MembershipRole {
@@ -97,6 +98,17 @@ enum ModerationVerdict {
   spam
 }
 
+enum DataExportStatus {
+  pending
+  ready
+  failed
+}
+
+enum UserTier {
+  free
+  supporter
+}
+
 // =========== Auth.js adapter models ===========
 
 model Account {
@@ -151,9 +163,13 @@ model User {
   avatarUrl     String?
   // App profile
   isAdmin       Boolean   @default(false)
+  tier          UserTier  @default(free)
   availability  String?
   hoursPerWeek  Int?
   lookingFor    String?
+  // Record of acceptance of the Terms & Privacy Policy (captured at sign-in).
+  termsAcceptedAt DateTime?
+  termsVersion    String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -180,6 +196,27 @@ model User {
   links                 UserLink[]
   createdEvents         Event[]              @relation("EventCreator")
   postVotes             PostVote[]
+  sentInvites           ProjectInvite[]      @relation("InviteSender")
+  acceptedInvites       ProjectInvite[]      @relation("InviteAccepter")
+  dataExports           DataExport[]
+}
+
+// GDPR data subject access request (DSAR) — assembled asynchronously and stored
+// until it expires so the user can download a complete copy of their data.
+model DataExport {
+  id          String           @id @default(cuid())
+  userId      String
+  status      DataExportStatus @default(pending)
+  payload     Json?
+  error       String?          @db.Text
+  requestedAt DateTime         @default(now())
+  completedAt DateTime?
+  expiresAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, requestedAt(sort: Desc)])
+  @@index([status, requestedAt])
 }
 
 model UserSkill {
@@ -231,8 +268,30 @@ model Project {
   chatMessages  ChatMessage[]
   projectFollows ProjectFollow[]
   events        Event[]
+  invites       ProjectInvite[]
 
   @@index([moderationStatus, createdAt(sort: Desc)])
+}
+
+model ProjectInvite {
+  id           String         @id @default(cuid())
+  projectId    String
+  email        String
+  role         MembershipRole @default(member)
+  token        String         @unique
+  status       InviteStatus   @default(pending)
+  invitedById  String
+  acceptedById String?
+  acceptedAt   DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime       @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invitedBy  User    @relation("InviteSender", fields: [invitedById], references: [id])
+  acceptedBy User?   @relation("InviteAccepter", fields: [acceptedById], references: [id])
+
+  @@index([projectId, status])
+  @@index([email])
 }
 
 model Event {

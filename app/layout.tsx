@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
+import { SiteFooter } from "@/components/SiteFooter";
+import { CookieNotice } from "@/components/CookieNotice";
+import { siteUrl } from "@/lib/site";
 
 const ibmPlexSans = IBM_Plex_Sans({
   variable: "--font-ibm-plex-sans",
@@ -22,8 +25,16 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: "corkbored",
+  metadataBase: new URL(siteUrl()),
+  title: {
+    default: "corkbored",
+    template: "%s · corkbored",
+  },
   description: "Side projects find real teams.",
+  openGraph: {
+    siteName: "corkbored",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -36,7 +47,11 @@ export default function RootLayout({
       <body
         className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} ${bricolage.variable} antialiased`}
       >
-        {children}
+        <div className="flex min-h-screen flex-col">
+          <div className="flex-1">{children}</div>
+          <SiteFooter />
+        </div>
+        <CookieNotice />
       </body>
     </html>
   );
